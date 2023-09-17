@@ -8,9 +8,7 @@ class ServerlessOfflineResources {
     this.serverless = serverless;
     this.service = serverless.service;
     this.config =
-      (this.service.custom && this.service.custom["offline-reources"]) || {};
-
-    console.log("Offline Resources: Config: ", this.config);
+      (this.service.custom && this.service.custom["offline-resources"]) || {};
 
     this.options = options;
     this.provider = "aws";
@@ -25,28 +23,28 @@ class ServerlessOfflineResources {
 
   get endpoint() {
     const config =
-      (this.service.custom && this.service.custom["offline-reources"]) || {};
+      (this.service.custom && this.service.custom["offline-resources"]) || {};
     const port = _.get(config, "endpoint", "http://localhost:4566");
     return port;
   }
 
   get region() {
     const config =
-      (this.service.custom && this.service.custom["offline-reources"]) || {};
+      (this.service.custom && this.service.custom["offline-resources"]) || {};
     const port = _.get(config, "region", "us-east-1");
     return port;
   }
 
   get accessKeyId() {
     const config =
-      (this.service.custom && this.service.custom["offline-reources"]) || {};
+      (this.service.custom && this.service.custom["offline-resources"]) || {};
     const port = _.get(config, "accessKeyId", "test");
     return port;
   }
 
   get secretAccessKey() {
     const config =
-      (this.service.custom && this.service.custom["offline-reources"]) || {};
+      (this.service.custom && this.service.custom["offline-resources"]) || {};
     const port = _.get(config, "secretAccessKey", "test");
     return port;
   }
