@@ -7,9 +7,8 @@ class ServerlessOfflineResources {
   constructor(serverless, options) {
     this.serverless = serverless;
     this.service = serverless.service;
-    this.serverlessLog = serverless.cli.log.bind(serverless.cli);
     this.config =
-      (this.service.custom && this.service.custom.offlineResources) || {};
+      (this.service.custom && this.service.custom["offline-reources"]) || {};
     this.options = options;
     this.provider = "aws";
 
@@ -23,28 +22,28 @@ class ServerlessOfflineResources {
 
   get endpoint() {
     const config =
-      (this.service.custom && this.service.custom.offlineResources) || {};
+      (this.service.custom && this.service.custom["offline-reources"]) || {};
     const port = _.get(config, "endpoint", "http://localhost:4566");
     return port;
   }
 
   get region() {
     const config =
-      (this.service.custom && this.service.custom.offlineResources) || {};
+      (this.service.custom && this.service.custom["offline-reources"]) || {};
     const port = _.get(config, "region", "us-east-1");
     return port;
   }
 
   get accessKeyId() {
     const config =
-      (this.service.custom && this.service.custom.offlineResources) || {};
+      (this.service.custom && this.service.custom["offline-reources"]) || {};
     const port = _.get(config, "accessKeyId", "test");
     return port;
   }
 
   get secretAccessKey() {
     const config =
-      (this.service.custom && this.service.custom.offlineResources) || {};
+      (this.service.custom && this.service.custom["offline-reources"]) || {};
     const port = _.get(config, "secretAccessKey", "test");
     return port;
   }
@@ -57,14 +56,7 @@ class ServerlessOfflineResources {
   }
 
   shouldExecute() {
-    let hasServerlessOffline = _.get(this.service, "plugins", []).includes(
-      "serverless-offline"
-    );
-    if (
-      hasServerlessOffline &&
-      this.config.stages &&
-      this.config.stages.includes(this.stage)
-    ) {
+    if (this.config.stages && this.config.stages.includes(this.stage)) {
       return true;
     }
     return false;
@@ -86,39 +78,29 @@ class ServerlessOfflineResources {
 
   dynamoDbHandler() {
     if (this.shouldExecute()) {
+      console.log(
+        `Offline Resources: Handling DynamoDB for stage: ${this.stage}`
+      );
       const dynamodb = this.dynamodbOptions();
       const tables = this.tables;
       return BbPromise.each(tables, (table) =>
         this.createDynamoDbTable(dynamodb, table)
-      );
-    } else {
-      this.serverlessLog(
-        "Skipping migration: DynamoDB Table Creation is not available for stage: " +
-          this.stage
       );
     }
   }
 
   startHandler() {
     if (this.shouldExecute()) {
-      // TODO Create Option
+      console.log(`Offline Resources is starting for stage: ${this.stage}`);
       return BbPromise.resolve().then(() => this.dynamoDbHandler());
     } else {
-      this.serverlessLog(
-        "Skipping start: Offline Resources is not available for stage: " +
-          this.stage
-      );
+      console.log(`Offline Resources is not enabled for stage: ${this.stage}`);
     }
   }
 
   endHandler() {
     if (this.shouldExecute()) {
-      // TODO Cleanup Option
-    } else {
-      this.serverlessLog(
-        "Skipping end: Offline Resources is not available for stage: " +
-          this.stage
-      );
+      console.log(`Offline Resources is ending for stage: ${this.stage}`);
     }
   }
 
@@ -186,19 +168,24 @@ class ServerlessOfflineResources {
           });
         }
       }
+      console.log(
+        `Offline Resources: Creating DynamoDB Table: ${migration.TableName}`
+      );
       dynamodb.raw.createTable(migration, (err) => {
         if (err) {
           if (err.name === "ResourceInUseException") {
-            this.serverlessLog(
-              `DynamoDB - Warn - table ${migration.TableName} already exists`
+            console.warn(
+              `Offline Resources: DynamoDB: Table already exists: ${migration.TableName}`
             );
             resolve();
           } else {
-            this.serverlessLog("DynamoDB - Error - ", err);
+            console.warn(`Offline Resources: DynamoDB Error:`, err);
             reject(err);
           }
         } else {
-          this.serverlessLog("DynamoDB - created table " + migration.TableName);
+          console.log(
+            `Offline Resources: Created DynamoDB Table: ${migration.TableName}`
+          );
           resolve(migration);
         }
       });
