@@ -1,0 +1,21 @@
+{
+  "name": "serverless-offline-resources",
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=4.0"
+  },
+  "description": "Serverless Offline Resources Plugin",
+  "author": "scaffold.ly",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/scaffoldly/serverless-offline-resources"
+  },
+  "main": "index.js",
+  "bin": {},
+  "dependencies": {
+    "aws-sdk": "^2.1459.0",
+    "bluebird": "^3.7.2",
+    "lodash": "^4.17.21"
+  }
+}
