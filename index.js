@@ -179,22 +179,26 @@ class ServerlessOfflineResources {
           });
         }
       }
-      dynamodb.raw.createTable(migration, (err) => {
+      dynamodb.raw.createTable(migration, (err, callback) => {
         if (err) {
           if (err.name === "ResourceInUseException") {
-            console.warn(
-              `Offline Resources: DynamoDB Table exists: ${migration.TableName}`
+            console.log(
+              `[offline-resources][dynamodb][${migration.TableName}] Table exists`
             );
             resolve();
           } else {
-            console.warn(`Offline Resources: DynamoDB Error:`, err);
+            console.warn(
+              `[offline-resources][dynamodb][${migration.TableName}] Table create error:`,
+              err
+            );
             reject(err);
           }
         } else {
           console.log(
-            `Offline Resources: DynamoDB Table created: ${migration.TableName}`
+            `[offline-resources][dynamodb][${migration.TableName}] Table created`
           );
-          resolve(migration);
+          console.log("!!! callback", callback);
+          resolve(callback);
         }
       });
     });
