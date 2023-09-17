@@ -89,9 +89,6 @@ class ServerlessOfflineResources {
 
   dynamoDbHandler() {
     if (this.shouldExecute()) {
-      console.log(
-        `Offline Resources: Handling DynamoDB for stage: ${this.stage}`
-      );
       const dynamodb = this.dynamodbOptions();
       const tables = this.tables;
       return BbPromise.each(tables, (table) =>
@@ -102,16 +99,13 @@ class ServerlessOfflineResources {
 
   startHandler() {
     if (this.shouldExecute()) {
-      console.log(`Offline Resources is starting for stage: ${this.stage}`);
       return BbPromise.resolve().then(() => this.dynamoDbHandler());
-    } else {
-      console.log(`Offline Resources is not enabled for stage: ${this.stage}`);
     }
   }
 
   endHandler() {
     if (this.shouldExecute()) {
-      console.log(`Offline Resources is ending for stage: ${this.stage}`);
+      //   console.log(`Offline Resources is ending for stage: ${this.stage}`);
     }
   }
 
@@ -179,14 +173,11 @@ class ServerlessOfflineResources {
           });
         }
       }
-      console.log(
-        `Offline Resources: Creating DynamoDB Table: ${migration.TableName}`
-      );
       dynamodb.raw.createTable(migration, (err) => {
         if (err) {
           if (err.name === "ResourceInUseException") {
             console.warn(
-              `Offline Resources: DynamoDB: Table already exists: ${migration.TableName}`
+              `Offline Resources: DynamoDB Table exists: ${migration.TableName}`
             );
             resolve();
           } else {
@@ -195,7 +186,7 @@ class ServerlessOfflineResources {
           }
         } else {
           console.log(
-            `Offline Resources: Created DynamoDB Table: ${migration.TableName}`
+            `Offline Resources: DynamoDB Table created: ${migration.TableName}`
           );
           resolve(migration);
         }
