@@ -9,14 +9,17 @@ class ServerlessOfflineResources {
     this.service = serverless.service;
     this.config =
       (this.service.custom && this.service.custom["offline-reources"]) || {};
+
+    console.log("Offline Resources: Config: ", this.config);
+
     this.options = options;
     this.provider = "aws";
 
     this.commands = {};
 
     this.hooks = {
-      "before:offline:start:init": this.startHandler.bind(this),
-      "before:offline:start:end": this.endHandler.bind(this),
+      "before:offline:start": this.startHandler.bind(this),
+      //   "before:offline:start:end": this.endHandler.bind(this),
     };
   }
 
