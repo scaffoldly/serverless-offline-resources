@@ -73,30 +73,6 @@ class ServerlessOfflineResources {
     return false;
   }
 
-  dynamodbOptions() {
-    let dynamoOptions = {
-      endpoint: this.endpoint,
-      region: this.region,
-      accessKeyId: this.accessKeyId,
-      secretAccessKey: this.secretAccessKey,
-    };
-
-    return {
-      raw: new AWS.DynamoDB(dynamoOptions),
-      doc: new AWS.DynamoDB.DocumentClient(dynamoOptions),
-    };
-  }
-
-  dynamoDbHandler() {
-    if (this.shouldExecute()) {
-      const dynamodb = this.dynamodbOptions();
-      const tables = this.tables;
-      return BbPromise.each(tables, (table) =>
-        this.createDynamoDbTable(dynamodb, table)
-      );
-    }
-  }
-
   startHandler() {
     if (this.shouldExecute()) {
       return BbPromise.resolve().then(() => this.dynamoDbHandler());
@@ -113,15 +89,29 @@ class ServerlessOfflineResources {
     return _.get(this.service, "resources");
   }
 
-  getDynamoDbTableDefinitionsFromStack(stack) {
+  getResourceDefinitionsFromStack(stack, name) {
     const resources = _.get(stack, "Resources", []);
     return Object.keys(resources)
       .map((key) => {
-        if (resources[key].Type === "AWS::DynamoDB::Table") {
+        if (resources[key].Type === name) {
           return resources[key].Properties;
         }
       })
       .filter((n) => n);
+  }
+
+  //
+  // DynamoDB
+  //
+
+  dynamoDbHandler() {
+    if (this.shouldExecute()) {
+      const dynamodb = this.dynamodbOptions();
+      const tables = this.tables;
+      return BbPromise.each(tables, (table) =>
+        this.createDynamoDbTable(dynamodb, table)
+      );
+    }
   }
 
   get tables() {
@@ -133,8 +123,24 @@ class ServerlessOfflineResources {
     }
 
     return stacks
-      .map((stack) => this.getDynamoDbTableDefinitionsFromStack(stack))
+      .map((stack) =>
+        this.getResourceDefinitionsFromStack(stack, "AWS::DynamoDB::Table")
+      )
       .reduce((tables, tablesInStack) => tables.concat(tablesInStack), []);
+  }
+
+  dynamodbOptions() {
+    let dynamoOptions = {
+      endpoint: this.endpoint,
+      region: this.region,
+      accessKeyId: this.accessKeyId,
+      secretAccessKey: this.secretAccessKey,
+    };
+
+    return {
+      raw: new AWS.DynamoDB(dynamoOptions),
+      doc: new AWS.DynamoDB.DocumentClient(dynamoOptions),
+    };
   }
 
   createDynamoDbTable(dynamodb, migration) {
