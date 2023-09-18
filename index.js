@@ -2,6 +2,10 @@
 const _ = require("lodash");
 const BbPromise = require("bluebird");
 const AWS = require("aws-sdk");
+const {
+  DynamoDBStreamsClient,
+  DescribeStreamCommand,
+} = require("@aws-sdk/client-dynamodb-streams");
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 
@@ -103,22 +107,35 @@ class ServerlessOfflineResources {
       .filter((n) => n);
   }
 
-  getFunctionsWithDynamodbStreamEventForTableKey(key) {
-    return this.service.getAllFunctions().filter((functionName) => {
+  getFunctionsWithStreamEvent(type, key) {
+    return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
       // find functions with events with "stream" and type "dynamodb"
-      return functionObject.events.some((event) => {
+      const event = functionObject.events.find((event) => {
         if (
           event.stream &&
-          event.stream.type === "dynamodb" &&
+          event.stream.type === type &&
           event.stream.arn &&
           event.stream.arn["Fn::GetAtt"] &&
-          event.stream.arn["Fn::GetAtt"][0] === key
+          event.stream.arn["Fn::GetAtt"][0] === key &&
+          event.stream.arn["Fn::GetAtt"][1] === "StreamArn"
         ) {
           return true;
         }
       });
-    });
+
+      if (!event) {
+        return acc;
+      }
+
+      acc.push({
+        functionName,
+        batchSize: event.stream.batchSize || 10,
+        // TODO: support other properties like maximumRecordAgeInSeconds
+      });
+
+      return acc;
+    }, []);
   }
 
   //
@@ -132,11 +149,11 @@ class ServerlessOfflineResources {
       await Promise.all(
         tables.map(async (table) => {
           const definition = await this.createDynamoDbTable(dynamodb, table);
-          const functions = this.getFunctionsWithDynamodbStreamEventForTableKey(
+          const functions = this.getFunctionsWithStreamEvent(
+            "dynamodb",
             definition.key
           );
-          console.log("!!! functions", functions);
-          await this.createDynamoDbStreams(dynamodb, definition);
+          await this.createDynamoDbStreams(dynamodb, definition, functions);
         })
       );
     }
@@ -245,8 +262,21 @@ class ServerlessOfflineResources {
     }
   }
 
-  async createDynamoDbStreams(dynamodb, definition) {
-    console.log("!!! create stream", definition);
+  async createDynamoDbStreams(dynamodb, definition, functions) {
+    await Promise.all(
+      functions.map(async (fn) => {
+        console.log(
+          `[offline-resources][dynamodb][${definition.key}][${fn.functionName}] Streaming enabled (batch size: ${fn.batchSize})`
+        );
+
+        // const client = new DynamoDBStreamsClient({ region: "REGION" });
+        // const commad = new DescribeStreamCommand({
+        //   StreamArn: definition.streamArn,
+        //   Limit: fn.batchSize,
+        // });
+        // console.log("!!! create stream", definition);
+      })
+    );
   }
 }
 module.exports = ServerlessOfflineResources;
