@@ -203,6 +203,7 @@ class ServerlessOfflineResources {
                   );
                   reject(err);
                 } else {
+                  console.log("!!! callback describe", callback);
                   resolve(callback.Table);
                 }
               }
@@ -219,6 +220,7 @@ class ServerlessOfflineResources {
           console.log(
             `[offline-resources][dynamodb][${migration.TableName}] Table created`
           );
+          console.log("!!! callback create", callback);
           resolve(callback.TableDescription);
         }
       });
