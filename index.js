@@ -193,8 +193,12 @@ class ServerlessOfflineResources {
       console.log(
         `[offline-resources][dynamodb][${key}] Table created: ${migration.TableName}`
       );
-      console.log("!!! create table", definition);
-      return definition.TableDescription;
+      return {
+        key,
+        name: definition.TableDescription.TableName,
+        arn: definition.TableDescription.TableArn,
+        streamArn: definition.TableDescription.LatestStreamArn,
+      };
     } catch (err) {
       if (err.name === "ResourceInUseException") {
         console.log(
@@ -204,8 +208,12 @@ class ServerlessOfflineResources {
           .describeTable({ TableName: migration.TableName })
           .promise();
 
-        console.log("!!! describe table", definition);
-        return definition.Table;
+        return {
+          key,
+          name: definition.Table.TableName,
+          arn: definition.Table.TableArn,
+          streamArn: definition.Table.LatestStreamArn,
+        };
       } else {
         console.warn(
           `[offline-resources][dynamodb][${key}] Unable to create table: ${migration.TableName} - ${err.message}`
