@@ -113,8 +113,8 @@ class ServerlessOfflineResources {
       const tables = this.tables;
       await Promise.all(
         tables.map(async (table) => {
-          const table = await this.createDynamoDbTable(dynamodb, table);
-          await this.createDynamoDbStreams(dynamodb, tableDescription);
+          const definition = await this.createDynamoDbTable(dynamodb, table);
+          await this.createDynamoDbStreams(dynamodb, definition);
         })
       );
     }
@@ -189,23 +189,23 @@ class ServerlessOfflineResources {
     }
 
     try {
-      let table = await dynamodb.raw.createTable(migration).promise();
+      let definition = await dynamodb.raw.createTable(migration).promise();
       console.log(
         `[offline-resources][dynamodb][${key}] Table created: ${migration.TableName}`
       );
-      console.log("!!! create table", table);
-      return table.TableDescription;
+      console.log("!!! create table", definition);
+      return definition.TableDescription;
     } catch (err) {
       if (err.name === "ResourceInUseException") {
         console.log(
           `[offline-resources][dynamodb][${key}] Table exists: ${migration.TableName}`
         );
-        table = await dynamodb.raw
+        definition = await dynamodb.raw
           .describeTable({ TableName: migration.TableName })
           .promise();
 
-        console.log("!!! describe table", table);
-        return table.Table;
+        console.log("!!! describe table", definition);
+        return definition.Table;
       } else {
         console.warn(
           `[offline-resources][dynamodb][${key}] Unable to create table: ${migration.TableName} - ${err.message}`
