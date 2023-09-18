@@ -5,6 +5,7 @@ const AWS = require("aws-sdk");
 const {
   DynamoDBStreamsClient,
   DescribeStreamCommand,
+  GetShardIteratorCommand,
 } = require("@aws-sdk/client-dynamodb-streams");
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
@@ -128,9 +129,16 @@ class ServerlessOfflineResources {
         return acc;
       }
 
+      if (event.batchSize !== 1) {
+        console.warn(
+          `[offline-resources][dynamodb][${key}][${functionName}] Batch size > 1 is not currently supported.`
+        );
+      }
+
       acc.push({
         functionName,
-        batchSize: event.stream.batchSize || 10,
+        batchSize: 1,
+        // TODO: support batch size
         // TODO: support other properties like maximumRecordAgeInSeconds
       });
 
@@ -265,10 +273,6 @@ class ServerlessOfflineResources {
   async createDynamoDbStreams(dynamodb, definition, functions) {
     await Promise.all(
       functions.map(async (fn) => {
-        console.log(
-          `[offline-resources][dynamodb][${definition.key}][${fn.functionName}] Streaming enabled (batch size: ${fn.batchSize})`
-        );
-
         const client = new DynamoDBStreamsClient({
           region: this.region,
           endpoint: this.endpoint,
@@ -283,7 +287,32 @@ class ServerlessOfflineResources {
         });
         const response = await client.send(command);
 
-        console.log("!!! response", response);
+        const shard = response.StreamDescription.Shards[0];
+
+        if (!shard) {
+          console.warn(
+            `[offline-resources][dynamodb][${definition.key}][${fn.functionName}] stream shard not found for ${definition.streamArn}`
+          );
+          return null;
+        }
+
+        const { ShardIterator: iterator } = await client.send(
+          new GetShardIteratorCommand({
+            ShardId: shard.ShardId,
+            ShardIteratorType: "LATEST", // TODO: Support other types?
+            StreamArn: definition.streamArn,
+          })
+        );
+
+        if (!iterator) {
+          console.warn(
+            `[offline-resources][dynamodb][${definition.key}][${fn.functionName}][${shard.ShardId}] shard iterator not found for ${definition.streamArn}`
+          );
+        }
+
+        console.log(
+          `[offline-resources][dynamodb][${definition.key}][${fn.functionName}][[${shard.ShardId}]] Streaming enabled (batch size: ${fn.batchSize})`
+        );
       })
     );
   }
