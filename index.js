@@ -269,12 +269,21 @@ class ServerlessOfflineResources {
           `[offline-resources][dynamodb][${definition.key}][${fn.functionName}] Streaming enabled (batch size: ${fn.batchSize})`
         );
 
-        // const client = new DynamoDBStreamsClient({ region: "REGION" });
-        // const commad = new DescribeStreamCommand({
-        //   StreamArn: definition.streamArn,
-        //   Limit: fn.batchSize,
-        // });
-        // console.log("!!! create stream", definition);
+        const client = new DynamoDBStreamsClient({
+          region: this.region,
+          endpoint: this.endpoint,
+          credentials: {
+            accessKeyId: this.accessKeyId,
+            secretAccessKey: this.secretAccessKey,
+          },
+        });
+        const command = new DescribeStreamCommand({
+          StreamArn: definition.streamArn,
+          Limit: fn.batchSize,
+        });
+        const response = await client.send(command);
+
+        console.log("!!! response", response);
       })
     );
   }
