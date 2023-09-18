@@ -112,7 +112,9 @@ class ServerlessOfflineResources {
       const dynamodb = this.dynamodbOptions();
       const tables = this.tables;
       return BbPromise.each(tables, (table) =>
-        this.createDynamoDbTable(dynamodb, table)
+        this.createDynamoDbTable(dynamodb, table).then((table) =>
+          this.createDynamoDbStream(dynamodb, table)
+        )
       );
     }
   }
@@ -201,8 +203,7 @@ class ServerlessOfflineResources {
                   );
                   reject(err);
                 } else {
-                  console.log("!!! callback from describe", callback);
-                  resolve(callback);
+                  resolve(callback.Table);
                 }
               }
             );
@@ -218,10 +219,16 @@ class ServerlessOfflineResources {
           console.log(
             `[offline-resources][dynamodb][${migration.TableName}] Table created`
           );
-          console.log("!!! callback from create", callback);
-          resolve(callback);
+          resolve(callback.TableDescription);
         }
       });
+    });
+  }
+
+  createDynamoDbStream(dynamodb, definition) {
+    return new BbPromise((resolve, reject) => {
+      console.log("!!! create stream", definition);
+      resolve();
     });
   }
 }
