@@ -189,7 +189,7 @@ class ServerlessOfflineResources {
     }
 
     try {
-      const table = await dynamodb.raw.createTable(migration).promise();
+      let table = await dynamodb.raw.createTable(migration).promise();
       console.log(
         `[offline-resources][dynamodb][${key}] Table created: ${migration.TableName}`
       );
@@ -200,7 +200,7 @@ class ServerlessOfflineResources {
         console.log(
           `[offline-resources][dynamodb][${key}] Table exists: ${migration.TableName}`
         );
-        const table = await dynamodb.raw
+        table = await dynamodb.raw
           .describeTable({ TableName: migration.TableName })
           .promise();
 
