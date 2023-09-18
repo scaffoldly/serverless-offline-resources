@@ -94,7 +94,10 @@ class ServerlessOfflineResources {
     return Object.keys(resources)
       .map((key) => {
         if (resources[key].Type === name) {
-          return resources[key].Properties;
+          return {
+            __key: key,
+            ...resources[key].Properties,
+          };
         }
       })
       .filter((n) => n);
@@ -145,6 +148,9 @@ class ServerlessOfflineResources {
 
   createDynamoDbTable(dynamodb, migration) {
     return new BbPromise((resolve, reject) => {
+      const key = migration.__key;
+      delete migration.__key;
+
       if (
         migration.StreamSpecification &&
         migration.StreamSpecification.StreamViewType
@@ -185,6 +191,21 @@ class ServerlessOfflineResources {
             console.log(
               `[offline-resources][dynamodb][${migration.TableName}] Table exists`
             );
+            dynamodb.raw.describeTable(
+              { TableName: migration.TableName },
+              (err, callback) => {
+                if (err) {
+                  console.warn(
+                    `[offline-resources][dynamodb][${migration.TableName}] Table describe error:`,
+                    err
+                  );
+                  reject(err);
+                } else {
+                  console.log("!!! callback from describe", callback);
+                  resolve(callback);
+                }
+              }
+            );
             resolve();
           } else {
             console.warn(
@@ -197,7 +218,7 @@ class ServerlessOfflineResources {
           console.log(
             `[offline-resources][dynamodb][${migration.TableName}] Table created`
           );
-          console.log("!!! callback", callback);
+          console.log("!!! callback from create", callback);
           resolve(callback);
         }
       });
