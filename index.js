@@ -73,13 +73,13 @@ class ServerlessOfflineResources {
     return false;
   }
 
-  startHandler() {
+  async startHandler() {
     if (this.shouldExecute()) {
-      return BbPromise.resolve().then(() => this.dynamoDbHandler());
+      await this.dynamoDbHandler();
     }
   }
 
-  endHandler() {
+  async endHandler() {
     if (this.shouldExecute()) {
       //   console.log(`Offline Resources is ending for stage: ${this.stage}`);
     }
@@ -107,14 +107,15 @@ class ServerlessOfflineResources {
   // DynamoDB
   //
 
-  dynamoDbHandler() {
+  async dynamoDbHandler() {
     if (this.shouldExecute()) {
       const dynamodb = this.dynamodbOptions();
       const tables = this.tables;
-      return BbPromise.each(tables, (table) =>
-        this.createDynamoDbTable(dynamodb, table).then((table) =>
-          this.createDynamoDbStream(dynamodb, table)
-        )
+      await Promise.all(
+        tables.map(async (table) => {
+          const table = await this.createDynamoDbTable(dynamodb, table);
+          await this.createDynamoDbStreams(dynamodb, tableDescription);
+        })
       );
     }
   }
@@ -148,90 +149,74 @@ class ServerlessOfflineResources {
     };
   }
 
-  createDynamoDbTable(dynamodb, migration) {
-    return new BbPromise((resolve, reject) => {
-      const key = migration.__key;
-      delete migration.__key;
+  async createDynamoDbTable(dynamodb, migration) {
+    const key = migration.__key;
+    delete migration.__key;
 
-      if (
-        migration.StreamSpecification &&
-        migration.StreamSpecification.StreamViewType
-      ) {
-        migration.StreamSpecification.StreamEnabled = true;
-      }
-      if (migration.TimeToLiveSpecification) {
-        delete migration.TimeToLiveSpecification;
-      }
-      if (migration.SSESpecification) {
-        migration.SSESpecification.Enabled =
-          migration.SSESpecification.SSEEnabled;
-        delete migration.SSESpecification.SSEEnabled;
-      }
-      if (migration.PointInTimeRecoverySpecification) {
-        delete migration.PointInTimeRecoverySpecification;
-      }
-      if (migration.Tags) {
-        delete migration.Tags;
-      }
-      if (migration.BillingMode === "PAY_PER_REQUEST") {
-        delete migration.BillingMode;
+    if (
+      migration.StreamSpecification &&
+      migration.StreamSpecification.StreamViewType
+    ) {
+      migration.StreamSpecification.StreamEnabled = true;
+    }
+    if (migration.TimeToLiveSpecification) {
+      delete migration.TimeToLiveSpecification;
+    }
+    if (migration.SSESpecification) {
+      migration.SSESpecification.Enabled =
+        migration.SSESpecification.SSEEnabled;
+      delete migration.SSESpecification.SSEEnabled;
+    }
+    if (migration.PointInTimeRecoverySpecification) {
+      delete migration.PointInTimeRecoverySpecification;
+    }
+    if (migration.Tags) {
+      delete migration.Tags;
+    }
+    if (migration.BillingMode === "PAY_PER_REQUEST") {
+      delete migration.BillingMode;
 
-        const defaultProvisioning = {
-          ReadCapacityUnits: 5,
-          WriteCapacityUnits: 5,
-        };
-        migration.ProvisionedThroughput = defaultProvisioning;
-        if (migration.GlobalSecondaryIndexes) {
-          migration.GlobalSecondaryIndexes.forEach((gsi) => {
-            gsi.ProvisionedThroughput = defaultProvisioning;
-          });
-        }
+      const defaultProvisioning = {
+        ReadCapacityUnits: 5,
+        WriteCapacityUnits: 5,
+      };
+      migration.ProvisionedThroughput = defaultProvisioning;
+      if (migration.GlobalSecondaryIndexes) {
+        migration.GlobalSecondaryIndexes.forEach((gsi) => {
+          gsi.ProvisionedThroughput = defaultProvisioning;
+        });
       }
-      dynamodb.raw.createTable(migration, (err, callback) => {
-        if (err) {
-          if (err.name === "ResourceInUseException") {
-            console.log(
-              `[offline-resources][dynamodb][${migration.TableName}] Table exists`
-            );
-            dynamodb.raw.describeTable(
-              { TableName: migration.TableName },
-              (err, callback) => {
-                if (err) {
-                  console.warn(
-                    `[offline-resources][dynamodb][${migration.TableName}] Table describe error:`,
-                    err
-                  );
-                  reject(err);
-                } else {
-                  console.log("!!! callback describe", callback);
-                  resolve(callback.Table);
-                }
-              }
-            );
-            resolve();
-          } else {
-            console.warn(
-              `[offline-resources][dynamodb][${migration.TableName}] Table create error:`,
-              err
-            );
-            reject(err);
-          }
-        } else {
-          console.log(
-            `[offline-resources][dynamodb][${migration.TableName}] Table created`
-          );
-          console.log("!!! callback create", callback);
-          resolve(callback.TableDescription);
-        }
-      });
-    });
+    }
+
+    try {
+      const table = await dynamodb.raw.createTable(migration).promise();
+      console.log(
+        `[offline-resources][dynamodb][${key}] Table created: ${migration.TableName}`
+      );
+      console.log("!!! create table", table);
+      return table.TableDescription;
+    } catch (err) {
+      if (err.name === "ResourceInUseException") {
+        console.log(
+          `[offline-resources][dynamodb][${key}] Table exists: ${migration.TableName}`
+        );
+        const table = await dynamodb.raw
+          .describeTable({ TableName: migration.TableName })
+          .promise();
+
+        console.log("!!! describe table", table);
+        return table.Table;
+      } else {
+        console.warn(
+          `[offline-resources][dynamodb][${key}] Unable to create table: ${migration.TableName} - ${err.message}`
+        );
+        throw err;
+      }
+    }
   }
 
-  createDynamoDbStream(dynamodb, definition) {
-    return new BbPromise((resolve, reject) => {
-      console.log("!!! create stream", definition);
-      resolve();
-    });
+  async createDynamoDbStreams(dynamodb, definition) {
+    console.log("!!! create stream", definition);
   }
 }
 module.exports = ServerlessOfflineResources;
