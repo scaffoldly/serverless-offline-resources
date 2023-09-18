@@ -103,6 +103,24 @@ class ServerlessOfflineResources {
       .filter((n) => n);
   }
 
+  getFunctionsWithDynamodbStreamEventForTableKey(key) {
+    return this.service.getAllFunctions().filter((functionName) => {
+      const functionObject = this.service.getFunction(functionName);
+      // find functions with events with "stream" and type "dynamodb"
+      return functionObject.events.some((event) => {
+        if (
+          event.stream &&
+          event.stream.type === "dynamodb" &&
+          event.stream.arn &&
+          event.stream.arn["Fn::GetAtt"] &&
+          event.stream.arn["Fn::GetAtt"][0] === key
+        ) {
+          return true;
+        }
+      });
+    });
+  }
+
   //
   // DynamoDB
   //
@@ -114,6 +132,10 @@ class ServerlessOfflineResources {
       await Promise.all(
         tables.map(async (table) => {
           const definition = await this.createDynamoDbTable(dynamodb, table);
+          const functions = this.getFunctionsWithDynamodbStreamEventForTableKey(
+            definition.key
+          );
+          console.log("!!! functions", functions);
           await this.createDynamoDbStreams(dynamodb, definition);
         })
       );
