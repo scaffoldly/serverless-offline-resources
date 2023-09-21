@@ -288,7 +288,7 @@ class ServerlessOfflineResources {
   }
 
   async emitStreamRecords(records, functionName, streamArn) {
-    const client = new LambdaClient();
+    const client = new LambdaClient({ region: this.region });
     const event = new StreamEvent(records, this.region, streamArn);
     try {
       client.send(
