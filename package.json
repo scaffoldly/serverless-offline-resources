@@ -15,6 +15,7 @@
   "bin": {},
   "dependencies": {
     "@aws-sdk/client-dynamodb-streams": "^3.414.0",
+    "@aws-sdk/client-lambda": "^3.414.0",
     "aws-sdk": "^2.1459.0",
     "bluebird": "^3.7.2",
     "lodash": "^4.17.21"

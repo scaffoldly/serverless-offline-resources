@@ -4,6 +4,7 @@ const BbPromise = require("bluebird");
 const AWS = require("aws-sdk");
 const { DynamoDBStreamsClient } = require("@aws-sdk/client-dynamodb-streams");
 const { DynamoDBStreamPoller, StreamEvent } = require("./streams");
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 
@@ -287,14 +288,18 @@ class ServerlessOfflineResources {
   }
 
   async emitStreamRecords(records, functionName, streamArn) {
+    const client = new LambdaClient();
     const event = new StreamEvent(records, this.region, streamArn);
-    const lambdaFunction = this.service.getFunction(functionName);
-    console.log("!!! lambdaFUNCTION", lambdaFunction);
-    lambdaFunction.setEvent(event);
     try {
-      await lambdaFunction.runHandler();
+      client.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          Payload: JSON.stringify(event),
+          InvocationType: "Event",
+        })
+      );
     } catch (e) {
-      console.warn("Error running handler", e);
+      console.warn("Error invoking", e);
     }
   }
 }
