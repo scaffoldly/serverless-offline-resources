@@ -197,6 +197,7 @@ class ServerlessOfflineResources {
           accessKeyId: dynamoOptions.accessKeyId,
           secretAccessKey: dynamoOptions.secretAccessKey,
         },
+        maxAttempts: 1,
       }),
     };
   }
