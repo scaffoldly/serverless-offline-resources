@@ -1,6 +1,7 @@
 const {
   DescribeStreamCommand,
   GetRecordsCommand,
+  GetShardIteratorCommand,
 } = require("@aws-sdk/client-dynamodb-streams");
 
 const { assign } = require("lodash/fp");
@@ -25,10 +26,15 @@ class DynamoDBStreamPoller {
       );
 
       for (const shard of Shards) {
-        this.shardIterators.set(
-          shard.ShardId,
-          shard.SequenceNumberRange.StartingSequenceNumber
+        const { ShardIterator } = await this.client.send(
+          new GetShardIteratorCommand({
+            ShardId: shard.ShardId,
+            ShardIteratorType: "LATEST",
+            StreamArn: this.streamArn,
+            SequenceNumber: shard.SequenceNumberRange.StartingSequenceNumber,
+          })
         );
+        this.shardIterators.set(shard.ShardId, ShardIterator);
         this.recordQueues.set(shard.ShardId, []);
       }
 
