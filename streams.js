@@ -16,6 +16,7 @@ class DynamoDBStreamPoller {
   }
 
   async start() {
+    console.log("Polling for records on stream", this.streamArn);
     try {
       const {
         StreamDescription: { Shards },
@@ -97,15 +98,20 @@ class DynamoDBStreamPoller {
       } else if (NextShardIterator) {
         this.timeoutIds.set(
           shardId,
-          setTimeout(() => this.getRecords(shardId), 0)
+          setTimeout(() => this.getRecords(shardId), 1000)
         );
       }
     } catch (error) {
-      console.warn(error);
+      console.log("Error polling for records", error.message);
+      this.timeoutIds.set(
+        shardId,
+        setTimeout(() => this.getRecords(shardId), 1000)
+      );
     }
   }
 
   stop() {
+    console.log("Polling for records on stream", this.streamArn);
     this.timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
   }
 }
