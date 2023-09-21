@@ -2,11 +2,8 @@
 const _ = require("lodash");
 const BbPromise = require("bluebird");
 const AWS = require("aws-sdk");
-const {
-  DynamoDBStreamsClient,
-  DescribeStreamCommand,
-  GetShardIteratorCommand,
-} = require("@aws-sdk/client-dynamodb-streams");
+const { DynamoDBStreamsClient } = require("@aws-sdk/client-dynamodb-streams");
+const { DynamoDBStreamPoller, StreamEvent } = require("./streams");
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 
@@ -17,6 +14,8 @@ class ServerlessOfflineResources {
     this.config =
       (this.service.custom && this.service.custom["offline-resources"]) || {};
 
+    this.dynamoDbPoller = null;
+
     this.options = options;
     this.provider = "aws";
 
@@ -24,7 +23,7 @@ class ServerlessOfflineResources {
 
     this.hooks = {
       "before:offline:start": this.startHandler.bind(this),
-      //   "before:offline:start:end": this.endHandler.bind(this),
+      "before:offline:start:end": this.endHandler.bind(this),
     };
   }
 
@@ -86,7 +85,10 @@ class ServerlessOfflineResources {
 
   async endHandler() {
     if (this.shouldExecute()) {
-      //   console.log(`Offline Resources is ending for stage: ${this.stage}`);
+      console.log(`Offline Resources is ending for stage: ${this.stage}`);
+      if (this.dynamoDbPoller) {
+        this.dynamoDbPoller.stop();
+      }
     }
   }
 
@@ -129,17 +131,12 @@ class ServerlessOfflineResources {
         return acc;
       }
 
-      if (event.batchSize !== 1) {
-        console.warn(
-          `[offline-resources][dynamodb][${key}][${functionName}] Batch size > 1 is not currently supported.`
-        );
-      }
-
       acc.push({
         functionName,
-        batchSize: 1,
-        // TODO: support batch size
-        // TODO: support other properties like maximumRecordAgeInSeconds
+        // TODO Slice on error and other properties
+        batchSize: event.batchSize || 1,
+        maximumRecordAgeInSeconds: event.maximumRecordAgeInSeconds || undefined,
+        recordStreamHandler: this.emitStreamRecords.bind(this),
       });
 
       return acc;
@@ -193,6 +190,14 @@ class ServerlessOfflineResources {
     return {
       raw: new AWS.DynamoDB(dynamoOptions),
       doc: new AWS.DynamoDB.DocumentClient(dynamoOptions),
+      stream: new DynamoDBStreamsClient({
+        region: dynamoOptions.region,
+        endpoint: dynamoOptions.endpoint,
+        credentials: {
+          accessKeyId: dynamoOptions.accessKeyId,
+          secretAccessKey: dynamoOptions.secretAccessKey,
+        },
+      }),
     };
   }
 
@@ -271,50 +276,24 @@ class ServerlessOfflineResources {
   }
 
   async createDynamoDbStreams(dynamodb, definition, functions) {
-    await Promise.all(
-      functions.map(async (fn) => {
-        const client = new DynamoDBStreamsClient({
-          region: this.region,
-          endpoint: this.endpoint,
-          credentials: {
-            accessKeyId: this.accessKeyId,
-            secretAccessKey: this.secretAccessKey,
-          },
-        });
-        const command = new DescribeStreamCommand({
-          StreamArn: definition.streamArn,
-          Limit: fn.batchSize,
-        });
-        const response = await client.send(command);
-
-        const shard = response.StreamDescription.Shards[0];
-
-        if (!shard) {
-          console.warn(
-            `[offline-resources][dynamodb][${definition.key}][${fn.functionName}] stream shard not found for ${definition.streamArn}`
-          );
-          return null;
-        }
-
-        const { ShardIterator: iterator } = await client.send(
-          new GetShardIteratorCommand({
-            ShardId: shard.ShardId,
-            ShardIteratorType: "LATEST", // TODO: Support other types?
-            StreamArn: definition.streamArn,
-          })
-        );
-
-        if (!iterator) {
-          console.warn(
-            `[offline-resources][dynamodb][${definition.key}][${fn.functionName}][${shard.ShardId}] shard iterator not found for ${definition.streamArn}`
-          );
-        }
-
-        console.log(
-          `[offline-resources][dynamodb][${definition.key}][${fn.functionName}][[${shard.ShardId}]] Streaming enabled (batch size: ${fn.batchSize})`
-        );
-      })
+    this.dynamoDbPoller = new DynamoDBStreamPoller(
+      dynamodb.stream,
+      definition.streamArn,
+      functions
     );
+
+    await this.dynamoDbPoller.start();
+  }
+
+  async emitStreamRecords(records, functionName, streamArn) {
+    const event = new StreamEvent(records, this.region, streamArn);
+    const lambdaFunction = this.service.getFunction(functionName);
+    lambdaFunction.setEvent(event);
+    try {
+      await lambdaFunction.runHandler();
+    } catch (e) {
+      console.warn("Error running handler", e);
+    }
   }
 }
 module.exports = ServerlessOfflineResources;
