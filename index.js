@@ -289,6 +289,7 @@ class ServerlessOfflineResources {
   async emitStreamRecords(records, functionName, streamArn) {
     const event = new StreamEvent(records, this.region, streamArn);
     const lambdaFunction = this.service.getFunction(functionName);
+    console.log("!!! lambdaFUNCTION", lambdaFunction);
     lambdaFunction.setEvent(event);
     try {
       await lambdaFunction.runHandler();

@@ -53,13 +53,9 @@ class DynamoDBStreamPoller {
       const shardIterator = this.shardIterators.get(shardId);
       if (!shardIterator) return;
 
-      console.log("!!! getRecords", shardId, shardIterator);
-
       const { Records, NextShardIterator } = await this.client.send(
         new GetRecordsCommand({ ShardIterator: shardIterator })
       );
-
-      console.log("!!! got Records", Records.length);
 
       const recordQueue = this.recordQueues.get(shardId);
       if (Records && Records.length > 0) {
