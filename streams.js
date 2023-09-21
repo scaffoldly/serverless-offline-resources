@@ -32,7 +32,11 @@ class DynamoDBStreamPoller {
         this.recordQueues.set(shard.ShardId, []);
       }
 
-      Shards.forEach((shard) => this.getRecords(shard.ShardId));
+      await Promise.all(
+        Shards.map(async (shard) => {
+          await this.getRecords(shard.ShardId);
+        })
+      );
     } catch (error) {
       console.warn(error);
     }
@@ -43,9 +47,13 @@ class DynamoDBStreamPoller {
       const shardIterator = this.shardIterators.get(shardId);
       if (!shardIterator) return;
 
+      console.log("!!! getRecords", shardId, shardIterator);
+
       const { Records, NextShardIterator } = await this.client.send(
         new GetRecordsCommand({ ShardIterator: shardIterator })
       );
+
+      console.log("!!! got Records", Records.length);
 
       const recordQueue = this.recordQueues.get(shardId);
       if (Records && Records.length > 0) {
@@ -102,7 +110,6 @@ class DynamoDBStreamPoller {
         );
       }
     } catch (error) {
-      console.log("Error polling for records", error.message);
       this.timeoutIds.set(
         shardId,
         setTimeout(() => this.getRecords(shardId), 1000)
