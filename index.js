@@ -288,6 +288,9 @@ class ServerlessOfflineResources {
   }
 
   async emitStreamRecords(records, functionName, streamArn) {
+    if (!records || !records.length) {
+      return;
+    }
     const client = new LambdaClient({
       region: this.region,
       endpoint: process.env.AWS_ENDPOINT_URL,
