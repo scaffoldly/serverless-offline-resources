@@ -292,10 +292,8 @@ class ServerlessOfflineResources {
       return;
     }
     const client = new LambdaClient({
-      region: this.region,
-      endpoint: process.env.IS_OFFLINE
-        ? "http://localhost:3002"
-        : process.env.AWS_ENDPOINT_URL || undefined,
+      apiVersion: "2015-03-31",
+      endpoint: "http://localhost:3002",
     });
     const event = new StreamEvent(records, this.region, streamArn);
     try {
