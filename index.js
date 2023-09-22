@@ -114,7 +114,6 @@ class ServerlessOfflineResources {
   getFunctionsWithStreamEvent(type, key) {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
-      console.log("!!! functionObject", functionObject);
       // find functions with events with "stream" and type "dynamodb"
       const event = functionObject.events.find((event) => {
         if (
@@ -134,7 +133,7 @@ class ServerlessOfflineResources {
       }
 
       acc.push({
-        functionName,
+        functionName: functionObject.name,
         // TODO Slice on error and other properties
         batchSize: event.batchSize || 1,
         maximumRecordAgeInSeconds: event.maximumRecordAgeInSeconds || undefined,
