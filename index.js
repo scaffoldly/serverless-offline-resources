@@ -114,6 +114,7 @@ class ServerlessOfflineResources {
   getFunctionsWithStreamEvent(type, key) {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
+      console.log("!!! functionObject", functionObject);
       // find functions with events with "stream" and type "dynamodb"
       const event = functionObject.events.find((event) => {
         if (
@@ -293,7 +294,9 @@ class ServerlessOfflineResources {
     }
     const client = new LambdaClient({
       region: this.region,
-      endpoint: process.env.AWS_ENDPOINT_URL,
+      endpoint: process.env.IS_OFFLINE
+        ? "http://localhost:3002"
+        : process.env.AWS_ENDPOINT_URL || undefined,
     });
     const event = new StreamEvent(records, this.region, streamArn);
     try {
