@@ -158,9 +158,13 @@ class ServerlessOfflineResources {
     // const resources = this.resources;
 
     try {
+      const stackName = `${this.service.service}-${this.stage}`;
+      console.log(
+        `[offline-resources][cloudformation][${stackName}] Creating stack.`
+      );
       await clients.cloudformation
         .createStack({
-          StackName: `${this.service.service}-${this.stage}`,
+          StackName: stackName,
           Capabilities: ["CAPABILITY_IAM"],
           OnFailure: "DELETE",
           Parameters: [],
@@ -168,7 +172,7 @@ class ServerlessOfflineResources {
           TemplateBody: JSON.stringify(this.getResources()),
         })
         .promise();
-    } catch (e) {
+    } catch (err) {
       console.warn(
         `[offline-resources][cloudformation] Unable to create stack. - ${err.message}`
       );
