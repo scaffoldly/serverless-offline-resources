@@ -80,7 +80,6 @@ class ServerlessOfflineResources {
 
   async startHandler() {
     if (this.shouldExecute()) {
-      // await this.dynamoDbHandler();
       const resources = await this.resourcesHandler();
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
     }
@@ -93,28 +92,6 @@ class ServerlessOfflineResources {
         this.dynamoDbPoller.stop();
       }
     }
-  }
-
-  getDefaultStack() {
-    return _.get(this.service, "resources");
-  }
-
-  getResources() {
-    return _.get(this.service, "resources", {});
-  }
-
-  getResourceDefinitionsFromStack(stack, names) {
-    const resources = _.get(stack, "Resources", []);
-    return Object.keys(resources)
-      .map((key) => {
-        if (names.includes(resources[key].Type)) {
-          return {
-            __key: key,
-            ...resources[key].Properties,
-          };
-        }
-      })
-      .filter((n) => n);
   }
 
   getFunctionsWithStreamEvent(type, key) {
@@ -149,10 +126,6 @@ class ServerlessOfflineResources {
       return acc;
     }, []);
   }
-
-  //
-  // DynamoDB
-  //
 
   async resourcesHandler() {
     let stackResources = {
@@ -261,42 +234,6 @@ class ServerlessOfflineResources {
     );
   }
 
-  get tables() {
-    let stacks = [];
-
-    const defaultStack = this.getDefaultStack();
-    if (defaultStack) {
-      stacks.push(defaultStack);
-    }
-
-    return stacks
-      .map((stack) =>
-        this.getResourceDefinitionsFromStack(stack, "AWS::DynamoDB::Table")
-      )
-      .reduce((tables, tablesInStack) => tables.concat(tablesInStack), []);
-  }
-
-  get resources() {
-    let stacks = [];
-
-    const defaultStack = this.getDefaultStack();
-    if (defaultStack) {
-      stacks.push(defaultStack);
-    }
-
-    return stacks
-      .map((stack) =>
-        this.getResourceDefinitionsFromStack(stack, [
-          "AWS::DynamoDB::Table",
-          "AWS::SNS::Topic",
-          "AWS::SQS::Queue",
-        ])
-      )
-      .reduce((resources, resourcesInStack) =>
-        resources.concat(resourcesInStack)
-      );
-  }
-
   clients() {
     let options = {
       endpoint: this.endpoint,
@@ -312,145 +249,6 @@ class ServerlessOfflineResources {
       sns: new AWS.SNS(options),
       sqs: new AWS.SQS(options),
     };
-  }
-
-  // async createResources() {
-  //   const clients = this.clients();
-  //   const resources = this.resources;
-  //   await Promise.all(
-  //     resources.map(async (resource) => {
-  //       const key = resource.__key;
-  //       delete resource.__key;
-
-  //       try {
-  //         await clients.cloudformation
-  //           .createStack({
-  //             StackName: `${this.service.service}-${this.stage}-${key}`,
-  //             Capabilities: ["CAPABILITY_IAM"],
-  //             OnFailure: "DELETE",
-  //             Parameters: [],
-  //             Tags: [],
-  //             TemplateBody: JSON.stringify({
-  //               Resources: {
-  //                 [key]: resource,
-  //               },
-  //             }),
-  //           })
-  //           .promise();
-  //         console.log(
-  //           `[offline-resources][${key}] Resource created: ${resource.Type}`
-  //         );
-  //       } catch (err) {
-  //         if (err.name === "AlreadyExistsException") {
-  //           console.log(
-  //             `[offline-resources][${key}] Resource exists: ${resource.Type}`
-  //           );
-  //         } else {
-  //           console.warn(
-  //             `[offline-resources][${key}] Unable to create resource: ${resource.Type} - ${err.message}`
-  //           );
-  //           throw err;
-  //         }
-  //       }
-  //     })
-  //   );
-  // }
-
-  dynamodbOptions() {
-    let dynamoOptions = {
-      endpoint: this.endpoint,
-      region: this.region,
-      accessKeyId: this.accessKeyId,
-      secretAccessKey: this.secretAccessKey,
-    };
-
-    return {
-      raw: new AWS.DynamoDB(dynamoOptions),
-      doc: new AWS.DynamoDB.DocumentClient(dynamoOptions),
-      stream: new DynamoDBStreamsClient({
-        region: dynamoOptions.region,
-        endpoint: dynamoOptions.endpoint,
-        credentials: {
-          accessKeyId: dynamoOptions.accessKeyId,
-          secretAccessKey: dynamoOptions.secretAccessKey,
-        },
-        maxAttempts: 1,
-      }),
-    };
-  }
-
-  async createDynamoDbTable(dynamodb, migration) {
-    const key = migration.__key;
-    delete migration.__key;
-
-    if (
-      migration.StreamSpecification &&
-      migration.StreamSpecification.StreamViewType
-    ) {
-      migration.StreamSpecification.StreamEnabled = true;
-    }
-    if (migration.TimeToLiveSpecification) {
-      delete migration.TimeToLiveSpecification;
-    }
-    if (migration.SSESpecification) {
-      migration.SSESpecification.Enabled =
-        migration.SSESpecification.SSEEnabled;
-      delete migration.SSESpecification.SSEEnabled;
-    }
-    if (migration.PointInTimeRecoverySpecification) {
-      delete migration.PointInTimeRecoverySpecification;
-    }
-    if (migration.Tags) {
-      delete migration.Tags;
-    }
-    if (migration.BillingMode === "PAY_PER_REQUEST") {
-      delete migration.BillingMode;
-
-      const defaultProvisioning = {
-        ReadCapacityUnits: 5,
-        WriteCapacityUnits: 5,
-      };
-      migration.ProvisionedThroughput = defaultProvisioning;
-      if (migration.GlobalSecondaryIndexes) {
-        migration.GlobalSecondaryIndexes.forEach((gsi) => {
-          gsi.ProvisionedThroughput = defaultProvisioning;
-        });
-      }
-    }
-
-    try {
-      const definition = await dynamodb.raw.createTable(migration).promise();
-      console.log(
-        `[offline-resources][dynamodb][${key}] Table created: ${migration.TableName}`
-      );
-      return {
-        key,
-        name: definition.TableDescription.TableName,
-        arn: definition.TableDescription.TableArn,
-        streamArn: definition.TableDescription.LatestStreamArn,
-      };
-    } catch (err) {
-      if (err.name === "ResourceInUseException") {
-        console.log(
-          `[offline-resources][dynamodb][${key}] Table exists: ${migration.TableName}`
-        );
-        const definition = await dynamodb.raw
-          .describeTable({ TableName: migration.TableName })
-          .promise();
-
-        return {
-          key,
-          name: definition.Table.TableName,
-          arn: definition.Table.TableArn,
-          streamArn: definition.Table.LatestStreamArn,
-        };
-      } else {
-        console.warn(
-          `[offline-resources][dynamodb][${key}] Unable to create table: ${migration.TableName} - ${err.message}`
-        );
-        throw err;
-      }
-    }
   }
 
   async createDynamoDbStreams(tableKey, tableName) {

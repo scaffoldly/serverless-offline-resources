@@ -17,7 +17,6 @@ class DynamoDBStreamPoller {
   }
 
   async start() {
-    console.log("Polling for records on stream", this.streamArn);
     try {
       const {
         StreamDescription: { Shards },
@@ -120,7 +119,6 @@ class DynamoDBStreamPoller {
   }
 
   stop() {
-    console.log("Polling for records on stream", this.streamArn);
     this.timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId));
   }
 }
