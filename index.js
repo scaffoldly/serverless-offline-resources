@@ -159,10 +159,11 @@ class ServerlessOfflineResources {
 
     try {
       const stackName = `${this.service.service}-${this.stage}`;
+
       console.log(
         `[offline-resources][cloudformation][${stackName}] Creating stack.`
       );
-      await clients.cloudformation
+      const stack = await clients.cloudformation
         .createStack({
           StackName: stackName,
           Capabilities: ["CAPABILITY_IAM"],
@@ -172,11 +173,38 @@ class ServerlessOfflineResources {
           TemplateBody: JSON.stringify(this.getResources()),
         })
         .promise();
-    } catch (err) {
-      console.warn(
-        `[offline-resources][cloudformation] Unable to create stack. - ${err.message}`
-      );
-      throw err;
+
+      console.log("!!! create stack", stack);
+    } catch (createErr) {
+      if (createErr.name !== "ValidationError") {
+        console.warn(
+          `[offline-resources][cloudformation] Unable to create stack. - ${createErr.message}`
+        );
+        throw err;
+      }
+
+      try {
+        console.log(
+          `[offline-resources][cloudformation][${stackName}] Updating stack.`
+        );
+        const stack = await clients.cloudformation
+          .updateStack({
+            StackName: stackName,
+            Capabilities: ["CAPABILITY_IAM"],
+            OnFailure: "DELETE",
+            Parameters: [],
+            Tags: [],
+            TemplateBody: JSON.stringify(this.getResources()),
+          })
+          .promise();
+
+        console.log("!!! update stack", stack);
+      } catch (updateErr) {
+        console.warn(
+          `[offline-resources][cloudformation] Unable to update stack. - ${updateErr.message}`
+        );
+        throw err;
+      }
     }
   }
 
