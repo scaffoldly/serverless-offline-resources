@@ -166,6 +166,7 @@ class ServerlessOfflineResources {
         .createStack({
           StackName: stackName,
           Capabilities: ["CAPABILITY_IAM"],
+          OnFailure: "DELETE",
           Parameters: [],
           Tags: [],
           TemplateBody: JSON.stringify(this.getResources()),
@@ -189,7 +190,6 @@ class ServerlessOfflineResources {
           .updateStack({
             StackName: stackName,
             Capabilities: ["CAPABILITY_IAM"],
-            OnFailure: "DELETE",
             Parameters: [],
             Tags: [],
             TemplateBody: JSON.stringify(this.getResources()),
