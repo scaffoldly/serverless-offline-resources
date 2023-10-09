@@ -162,7 +162,7 @@ class ServerlessOfflineResources {
       console.log(
         `[offline-resources][cloudformation][${stackName}] Creating stack.`
       );
-      const stack = await clients.cloudformation
+      await clients.cloudformation
         .createStack({
           StackName: stackName,
           Capabilities: ["CAPABILITY_IAM"],
@@ -173,7 +173,14 @@ class ServerlessOfflineResources {
         })
         .promise();
 
-      console.log("!!! create stack", stack);
+      await clients.cloudformation
+        .waitFor("stackCreateComplete", {
+          StackName: stackName,
+        })
+        .promise();
+      console.log(
+        `[offline-resources][cloudformation][${stackName}] Stack created.`
+      );
     } catch (createErr) {
       if (createErr.name !== "ValidationError") {
         console.warn(
@@ -186,7 +193,7 @@ class ServerlessOfflineResources {
         console.log(
           `[offline-resources][cloudformation][${stackName}] Stack already exists. Updating stack.`
         );
-        const stack = await clients.cloudformation
+        await clients.cloudformation
           .updateStack({
             StackName: stackName,
             Capabilities: ["CAPABILITY_IAM"],
@@ -196,13 +203,38 @@ class ServerlessOfflineResources {
           })
           .promise();
 
-        console.log("!!! update stack", stack);
+        await clients.cloudformation
+          .waitFor("stackUpdateComplete", {
+            StackName: stackName,
+          })
+          .promise();
+
+        console.log(
+          `[offline-resources][cloudformation][${stackName}] Stack updated.`
+        );
       } catch (updateErr) {
         console.warn(
           `[offline-resources][cloudformation] Unable to update stack. - ${updateErr.message}`
         );
         throw updateErr;
       }
+    }
+  }
+
+  async waitForStack(stackName) {
+    const clients = this.clients();
+
+    try {
+      await clients.cloudformation
+        .waitFor("stackCreateComplete", {
+          StackName: stackName,
+        })
+        .promise();
+    } catch (err) {
+      console.warn(
+        `[offline-resources][cloudformation] Unable to wait for stack. - ${err.message}`
+      );
+      throw err;
     }
   }
 
