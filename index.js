@@ -81,7 +81,8 @@ class ServerlessOfflineResources {
   async startHandler() {
     if (this.shouldExecute()) {
       // await this.dynamoDbHandler();
-      await this.resourcesHandler();
+      const resources = await this.resourcesHandler();
+      console.log("!!! resources", resources);
     }
   }
 
@@ -154,6 +155,12 @@ class ServerlessOfflineResources {
   //
 
   async resourcesHandler() {
+    let stackResources = {
+      "AWS::DynamoDB::Table": [],
+      "AWS::SNS::Topic": [],
+      "AWS::SQS::Queue": [],
+    };
+
     const clients = this.clients();
     // const resources = this.resources;
     const stackName = `${this.service.service}-${this.stage}`;
@@ -184,7 +191,7 @@ class ServerlessOfflineResources {
     } catch (createErr) {
       if (createErr.name !== "ValidationError") {
         console.warn(
-          `[offline-resources][cloudformation] Unable to create stack. - ${createErr.message}`
+          `[offline-resources][cloudformation] Unable to create stack - ${createErr.message}`
         );
         throw createErr;
       }
@@ -214,28 +221,36 @@ class ServerlessOfflineResources {
         );
       } catch (updateErr) {
         console.warn(
-          `[offline-resources][cloudformation] Unable to update stack. - ${updateErr.message}`
+          `[offline-resources][cloudformation] Unable to update stack - ${updateErr.message}`
         );
         throw updateErr;
       }
     }
-  }
-
-  async waitForStack(stackName) {
-    const clients = this.clients();
 
     try {
-      await clients.cloudformation
-        .waitFor("stackCreateComplete", {
+      const stackResourcesResponse = await clients.cloudformation
+        .listStackResources({
           StackName: stackName,
         })
         .promise();
+
+      const supportedResources =
+        stackResourcesResponse.StackResourceSummaries.forEach((r) => {
+          if (Object.keys(stackResources).includes(r.ResourceType)) {
+            stackResources[r.ResourceType].push({
+              __key: r.LogicalResourceId,
+              id: r.PhysicalResourceId,
+            });
+          }
+        });
     } catch (err) {
       console.warn(
-        `[offline-resources][cloudformation] Unable to wait for stack. - ${err.message}`
+        `[offline-resources][cloudformation] Unable to list stack resources - ${updateErr.message}`
       );
       throw err;
     }
+
+    return stackResources;
   }
 
   async dynamoDbHandler() {
