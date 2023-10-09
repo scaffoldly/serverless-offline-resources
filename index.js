@@ -180,12 +180,12 @@ class ServerlessOfflineResources {
         console.warn(
           `[offline-resources][cloudformation] Unable to create stack. - ${createErr.message}`
         );
-        throw err;
+        throw createErr;
       }
 
       try {
         console.log(
-          `[offline-resources][cloudformation][${stackName}] Updating stack.`
+          `[offline-resources][cloudformation][${stackName}] Stack already exists. Updating stack.`
         );
         const stack = await clients.cloudformation
           .updateStack({
@@ -203,7 +203,7 @@ class ServerlessOfflineResources {
         console.warn(
           `[offline-resources][cloudformation] Unable to update stack. - ${updateErr.message}`
         );
-        throw err;
+        throw updateErr;
       }
     }
   }
