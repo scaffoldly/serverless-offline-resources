@@ -156,10 +156,9 @@ class ServerlessOfflineResources {
   async resourcesHandler() {
     const clients = this.clients();
     // const resources = this.resources;
+    const stackName = `${this.service.service}-${this.stage}`;
 
     try {
-      const stackName = `${this.service.service}-${this.stage}`;
-
       console.log(
         `[offline-resources][cloudformation][${stackName}] Creating stack.`
       );
