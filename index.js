@@ -97,6 +97,10 @@ class ServerlessOfflineResources {
     return _.get(this.service, "resources");
   }
 
+  getResources() {
+    return _.get(this.service, "resources", {});
+  }
+
   getResourceDefinitionsFromStack(stack, names) {
     const resources = _.get(stack, "Resources", []);
     return Object.keys(resources)
@@ -147,6 +151,31 @@ class ServerlessOfflineResources {
   //
   // DynamoDB
   //
+
+  async resourcesHandler() {
+    if (this.shouldExecute()) {
+      const clients = this.clients();
+      // const resources = this.resources;
+
+      try {
+        await clients.cloudformation
+          .createStack({
+            StackName: `${this.service.service}-${this.stage}`,
+            Capabilities: ["CAPABILITY_IAM"],
+            OnFailure: "DELETE",
+            Parameters: [],
+            Tags: [],
+            TemplateBody: JSON.stringify(this.getResources()),
+          })
+          .promise();
+      } catch (e) {
+        console.warn(
+          `[offline-resources][cloudformation] Unable to create stack. - ${err.message}`
+        );
+        throw err;
+      }
+    }
+  }
 
   async dynamoDbHandler() {
     if (this.shouldExecute()) {
