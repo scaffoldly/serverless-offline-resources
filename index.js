@@ -94,6 +94,10 @@ class ServerlessOfflineResources {
     }
   }
 
+  getResources() {
+    return _.get(this.service, "resources", {});
+  }
+
   getFunctionsWithStreamEvent(type, key) {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
