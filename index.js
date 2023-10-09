@@ -308,7 +308,7 @@ class ServerlessOfflineResources {
     return {
       cloudformation: new AWS.CloudFormation(options),
       dynamodb: new AWS.DynamoDB(options),
-      dynamodbstreams: new AWS.DynamoDBStreams(options),
+      dynamodbstreams: new DynamoDBStreamsClient(options),
       sns: new AWS.SNS(options),
       sqs: new AWS.SQS(options),
     };
