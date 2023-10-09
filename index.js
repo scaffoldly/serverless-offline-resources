@@ -97,11 +97,11 @@ class ServerlessOfflineResources {
     return _.get(this.service, "resources");
   }
 
-  getResourceDefinitionsFromStack(stack, name) {
+  getResourceDefinitionsFromStack(stack, names) {
     const resources = _.get(stack, "Resources", []);
     return Object.keys(resources)
       .map((key) => {
-        if (resources[key].Type === name) {
+        if (names.contains(resources[key].Type)) {
           return {
             __key: key,
             ...resources[key].Properties,
@@ -152,6 +152,10 @@ class ServerlessOfflineResources {
     if (this.shouldExecute()) {
       const dynamodb = this.dynamodbOptions();
       const tables = this.tables;
+      const resources = this.resources;
+
+      console.log("!!! resources", resources);
+
       await Promise.all(
         tables.map(async (table) => {
           const definition = await this.createDynamoDbTable(dynamodb, table);
@@ -179,6 +183,86 @@ class ServerlessOfflineResources {
       )
       .reduce((tables, tablesInStack) => tables.concat(tablesInStack), []);
   }
+
+  get resources() {
+    let stacks = [];
+
+    const defaultStack = this.getDefaultStack();
+    if (defaultStack) {
+      stacks.push(defaultStack);
+    }
+
+    return stacks
+      .map((stack) =>
+        this.getResourceDefinitionsFromStack(stack, [
+          "AWS::DynamoDB::Table",
+          "AWS::SNS::Topic",
+          "AWS::SQS::Queue",
+        ])
+      )
+      .reduce((resources, resourcesInStack) =>
+        resources.concat(resourcesInStack)
+      );
+  }
+
+  clients() {
+    let options = {
+      endpoint: this.endpoint,
+      region: this.region,
+      accessKeyId: this.accessKeyId,
+      secretAccessKey: this.secretAccessKey,
+    };
+
+    return {
+      cloudformation: new AWS.CloudFormation(options),
+      dynamodb: new AWS.DynamoDB(options),
+      dynamodbstreams: new AWS.DynamoDBStreams(options),
+      sns: new AWS.SNS(options),
+      sqs: new AWS.SQS(options),
+    };
+  }
+
+  // async createResources() {
+  //   const clients = this.clients();
+  //   const resources = this.resources;
+  //   await Promise.all(
+  //     resources.map(async (resource) => {
+  //       const key = resource.__key;
+  //       delete resource.__key;
+
+  //       try {
+  //         await clients.cloudformation
+  //           .createStack({
+  //             StackName: `${this.service.service}-${this.stage}-${key}`,
+  //             Capabilities: ["CAPABILITY_IAM"],
+  //             OnFailure: "DELETE",
+  //             Parameters: [],
+  //             Tags: [],
+  //             TemplateBody: JSON.stringify({
+  //               Resources: {
+  //                 [key]: resource,
+  //               },
+  //             }),
+  //           })
+  //           .promise();
+  //         console.log(
+  //           `[offline-resources][${key}] Resource created: ${resource.Type}`
+  //         );
+  //       } catch (err) {
+  //         if (err.name === "AlreadyExistsException") {
+  //           console.log(
+  //             `[offline-resources][${key}] Resource exists: ${resource.Type}`
+  //           );
+  //         } else {
+  //           console.warn(
+  //             `[offline-resources][${key}] Unable to create resource: ${resource.Type} - ${err.message}`
+  //           );
+  //           throw err;
+  //         }
+  //       }
+  //     })
+  //   );
+  // }
 
   dynamodbOptions() {
     let dynamoOptions = {
