@@ -80,7 +80,8 @@ class ServerlessOfflineResources {
 
   async startHandler() {
     if (this.shouldExecute()) {
-      await this.dynamoDbHandler();
+      // await this.dynamoDbHandler();
+      await this.resourcesHandler();
     }
   }
 
@@ -153,27 +154,25 @@ class ServerlessOfflineResources {
   //
 
   async resourcesHandler() {
-    if (this.shouldExecute()) {
-      const clients = this.clients();
-      // const resources = this.resources;
+    const clients = this.clients();
+    // const resources = this.resources;
 
-      try {
-        await clients.cloudformation
-          .createStack({
-            StackName: `${this.service.service}-${this.stage}`,
-            Capabilities: ["CAPABILITY_IAM"],
-            OnFailure: "DELETE",
-            Parameters: [],
-            Tags: [],
-            TemplateBody: JSON.stringify(this.getResources()),
-          })
-          .promise();
-      } catch (e) {
-        console.warn(
-          `[offline-resources][cloudformation] Unable to create stack. - ${err.message}`
-        );
-        throw err;
-      }
+    try {
+      await clients.cloudformation
+        .createStack({
+          StackName: `${this.service.service}-${this.stage}`,
+          Capabilities: ["CAPABILITY_IAM"],
+          OnFailure: "DELETE",
+          Parameters: [],
+          Tags: [],
+          TemplateBody: JSON.stringify(this.getResources()),
+        })
+        .promise();
+    } catch (e) {
+      console.warn(
+        `[offline-resources][cloudformation] Unable to create stack. - ${err.message}`
+      );
+      throw err;
     }
   }
 
