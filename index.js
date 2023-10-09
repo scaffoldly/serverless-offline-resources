@@ -82,7 +82,7 @@ class ServerlessOfflineResources {
     if (this.shouldExecute()) {
       // await this.dynamoDbHandler();
       const resources = await this.resourcesHandler();
-      console.log("!!! resources", resources);
+      await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
     }
   }
 
@@ -238,7 +238,7 @@ class ServerlessOfflineResources {
         stackResourcesResponse.StackResourceSummaries.forEach((r) => {
           if (Object.keys(stackResources).includes(r.ResourceType)) {
             stackResources[r.ResourceType].push({
-              __key: r.LogicalResourceId,
+              key: r.LogicalResourceId,
               id: r.PhysicalResourceId,
             });
           }
@@ -253,25 +253,12 @@ class ServerlessOfflineResources {
     return stackResources;
   }
 
-  async dynamoDbHandler() {
-    if (this.shouldExecute()) {
-      const dynamodb = this.dynamodbOptions();
-      const tables = this.tables;
-      const resources = this.resources;
-
-      console.log("!!! resources", resources);
-
-      await Promise.all(
-        tables.map(async (table) => {
-          const definition = await this.createDynamoDbTable(dynamodb, table);
-          const functions = this.getFunctionsWithStreamEvent(
-            "dynamodb",
-            definition.key
-          );
-          await this.createDynamoDbStreams(dynamodb, definition, functions);
-        })
-      );
-    }
+  async dynamoDbHandler(tables) {
+    await Promise.all(
+      tables.map(async (table) => {
+        await this.createDynamoDbStreams(table.key, table.id);
+      })
+    );
   }
 
   get tables() {
@@ -466,10 +453,27 @@ class ServerlessOfflineResources {
     }
   }
 
-  async createDynamoDbStreams(dynamodb, definition, functions) {
+  async createDynamoDbStreams(tableKey, tableName) {
+    const functions = this.getFunctionsWithStreamEvent("dynamodb", tableKey);
+
+    const clients = this.clients();
+    const table = await clients.dynamodb
+      .describeTable({
+        TableName: tableName,
+      })
+      .promise();
+
+    const streamArn = table.Table.LatestStreamArn;
+
+    console.warn(
+      `[offline-resources][dynamodb][${tableKey}] Streaming to functions: ${functions.map(
+        (f) => f.functionName
+      )}`
+    );
+
     this.dynamoDbPoller = new DynamoDBStreamPoller(
-      dynamodb.stream,
-      definition.streamArn,
+      clients.dynamodbstreams,
+      streamArn,
       functions
     );
 
