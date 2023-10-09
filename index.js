@@ -101,7 +101,7 @@ class ServerlessOfflineResources {
     const resources = _.get(stack, "Resources", []);
     return Object.keys(resources)
       .map((key) => {
-        if (names.contains(resources[key].Type)) {
+        if (names.includes(resources[key].Type)) {
           return {
             __key: key,
             ...resources[key].Properties,
