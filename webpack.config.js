@@ -14,8 +14,8 @@ module.exports = {
 
   // output bundles (location)
   output: {
-    path: path.resolve(__dirname, "dist"),
-    filename: "main.js",
+    path: path.resolve(__dirname),
+    filename: "index.js",
   },
 
   // file resolutions
