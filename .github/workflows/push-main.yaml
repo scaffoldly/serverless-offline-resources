@@ -2,24 +2,20 @@ name: Push to Main
 
 on:
   workflow_dispatch:
-  push: {}
-    # branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   prerelease:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2-beta
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: "14"
-      - uses: actions/cache@v2
-        with:
-          path: ./node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          node-version: "16"
+          cache: "yarn"
       - run: yarn
+      - run: yarn build
       - uses: scaffoldly/bump-version-action@v1
         with:
           action: prerelease
