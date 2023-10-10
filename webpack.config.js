@@ -16,8 +16,8 @@ module.exports = {
   output: {
     path: path.resolve(__dirname),
     filename: "index.js",
-    library: "serverless-offline-localstack",
-    libraryTarget: "umd",
+    library: "ServerlessOfflineResources",
+    libraryTarget: "var",
   },
 
   // file resolutions
