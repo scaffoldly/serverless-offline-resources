@@ -3,7 +3,7 @@ const _ = require("lodash");
 const BbPromise = require("bluebird");
 const AWS = require("aws-sdk");
 const { DynamoDBStreamsClient } = require("@aws-sdk/client-dynamodb-streams");
-const { DynamoDBStreamPoller, StreamEvent } = require("./streams");
+const { DynamoDBStreamPoller, StreamEvent } = require("./dynamodb-streams");
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
@@ -160,6 +160,10 @@ class ServerlessOfflineResources {
       await clients.cloudformation
         .waitFor("stackCreateComplete", {
           StackName: stackName,
+          $waiter: {
+            delay: 1,
+            maxAttempts: 60,
+          },
         })
         .promise();
       console.log(
@@ -190,6 +194,10 @@ class ServerlessOfflineResources {
         await clients.cloudformation
           .waitFor("stackUpdateComplete", {
             StackName: stackName,
+            $waiter: {
+              delay: 1,
+              maxAttempts: 60,
+            },
           })
           .promise();
 
