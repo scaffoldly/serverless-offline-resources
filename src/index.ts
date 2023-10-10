@@ -129,6 +129,7 @@ export class ServerlessOfflineResources {
 
   async startHandler() {
     if (this.shouldExecute()) {
+      console.log(`[offline-resources][${this.stage}] Starting...`);
       const resources = await this.resourcesHandler();
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
     }
@@ -136,7 +137,7 @@ export class ServerlessOfflineResources {
 
   async endHandler() {
     if (this.shouldExecute()) {
-      console.log(`Offline Resources is ending for stage: ${this.stage}`);
+      console.log(`[offline-resources][${this.stage}] Ending!`);
       if (this.dynamoDbPoller) {
         this.dynamoDbPoller.stop();
       }
