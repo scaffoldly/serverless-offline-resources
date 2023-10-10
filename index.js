@@ -3,7 +3,7 @@ const _ = require("lodash");
 const BbPromise = require("bluebird");
 const AWS = require("aws-sdk");
 const { DynamoDBStreamsClient } = require("@aws-sdk/client-dynamodb-streams");
-const { DynamoDBStreamPoller, StreamEvent } = require("./dynamodb-streams");
+const { DynamoDBStreamPoller, StreamEvent } = require("./dynamodb-stream-poller");
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
