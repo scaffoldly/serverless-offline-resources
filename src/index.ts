@@ -51,7 +51,7 @@ type Options = {
   stage: string;
 };
 
-export class ServerlessOfflineResources {
+class ServerlessOfflineResources {
   service: ServerlessService;
   config: OfflineResourcesProps;
   dynamoDbPoller: DynamoDBStreamPoller | null;
@@ -382,3 +382,5 @@ export class ServerlessOfflineResources {
     }
   }
 }
+
+module.exports = ServerlessOfflineResources;
