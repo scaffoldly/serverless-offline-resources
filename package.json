@@ -12,25 +12,18 @@
     "url": "https://github.com/scaffoldly/serverless-offline-resources"
   },
   "main": "dist/index.js",
-  "bin": {},
   "scripts": {
     "build": "tsc",
-    "postinstall": "tsc"
+    "postinstall": "yarn build"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb-streams": "^3.414.0",
-    "@aws-sdk/client-lambda": "^3.414.0",
-    "@types/node": "18",
-    "aws-sdk": "^2.1459.0",
-    "bluebird": "^3.7.2",
-    "lodash": "^4.17.21"
+    "@aws-sdk/client-dynamodb-streams": ">=3",
+    "@aws-sdk/client-lambda": ">=3",
+    "@types/lodash": ">=4",
+    "@types/node": ">=16",
+    "aws-sdk": ">=2",
+    "lodash": ">=4",
+    "typescript": ">=5"
   },
-  "devDependencies": {
-    "@types/lodash": "^4.14.199",
-    "@types/serverless": "^3.12.16",
-    "ts-loader": "^9.5.0",
-    "typescript": "^5.3.0-dev.20231012",
-    "webpack": "5",
-    "webpack-cli": "5"
-  }
+  "devDependencies": {}
 }
