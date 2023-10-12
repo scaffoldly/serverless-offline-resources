@@ -53,17 +53,17 @@ type Options = {
 };
 
 export const msg = (
-  fn: (message: string, ...optionalParams: any[]) => void,
+  fn: (message: string, obj?: any) => void,
   stage: string,
   message: string,
-  ...optionalParams: any[]
+  obj?: any
 ) => {
   if (!message.startsWith("[")) {
     message = ` ${message}`;
   }
   fn(
     `[${PLUGIN_NAME}][${stage}]${message}`,
-    optionalParams && optionalParams.length ? optionalParams : undefined
+    obj ? JSON.stringify(obj) : undefined
   );
 };
 
@@ -93,12 +93,12 @@ class ServerlessOfflineResources {
     };
   }
 
-  log(message: string, ...optionalParams: any[]) {
-    msg(console.log, this.stage, message, optionalParams);
+  log(message: string, obj?: any) {
+    msg(console.log, this.stage, message, obj);
   }
 
-  warn(message: string, ...optionalParams: any[]) {
-    msg(console.warn, this.stage, message, optionalParams);
+  warn(message: string, obj?: any) {
+    msg(console.warn, this.stage, message, obj);
   }
 
   get endpoint() {
