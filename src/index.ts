@@ -53,18 +53,21 @@ type Options = {
 };
 
 export const msg = (
-  fn: (message: string, obj?: any) => void,
+  fn: (message?: any, ...optionalParams: any[]) => void,
   stage: string,
   message: string,
   obj?: any
 ) => {
   if (!message.startsWith("[")) {
-    message = ` ${message}`;
+    message = `[${PLUGIN_NAME}][${stage}] ${message}`;
+  } else {
+    message = `[${PLUGIN_NAME}][${stage}]${message}`;
   }
-  fn(
-    `[${PLUGIN_NAME}][${stage}]${message}`,
-    obj ? JSON.stringify(obj) : undefined
-  );
+  if (obj) {
+    fn(message, JSON.stringify(obj));
+  } else {
+    fn(message);
+  }
 };
 
 class ServerlessOfflineResources {
