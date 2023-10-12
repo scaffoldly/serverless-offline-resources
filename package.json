@@ -14,7 +14,8 @@
   "main": "dist/index.js",
   "bin": {},
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "postinstall": "tsc"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb-streams": "^3.414.0",
