@@ -61,7 +61,10 @@ export const msg = (
   if (!message.startsWith("[")) {
     message = ` ${message}`;
   }
-  fn(`[${PLUGIN_NAME}][${stage}]${message}`, optionalParams);
+  fn(
+    `[${PLUGIN_NAME}][${stage}]${message}`,
+    optionalParams && optionalParams.length ? optionalParams : undefined
+  );
 };
 
 class ServerlessOfflineResources {
