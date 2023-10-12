@@ -4,8 +4,9 @@
     /* Basic Options */
     "incremental": true,
     "target": "ESNext",
-    "module": "CommonJS",
-    "outDir": "build/",
+    "module": "NodeNext",
+    "rootDir": "./src",
+    "outDir": "./dist",
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
@@ -27,7 +28,7 @@
     "noFallthroughCasesInSwitch": true,
 
     /* Module Resolution Options */
-    "moduleResolution": "node",
+    "moduleResolution": "NodeNext",
     "baseUrl": "./",
     "esModuleInterop": true,
     "resolveJsonModule": true,
