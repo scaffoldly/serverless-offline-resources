@@ -9,6 +9,7 @@ import {
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 
 const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
+const PLUGIN_NAME = "offline-resources";
 
 type SupportedResources =
   | "AWS::DynamoDB::Table"
@@ -51,6 +52,18 @@ type Options = {
   stage: string;
 };
 
+export const msg = (
+  fn: (message: string, ...optionalParams: any[]) => void,
+  stage: string,
+  message: string,
+  ...optionalParams: any[]
+) => {
+  if (!message.startsWith("[")) {
+    message = ` ${message}`;
+  }
+  fn(`[${PLUGIN_NAME}][${stage}]${message}`, optionalParams);
+};
+
 class ServerlessOfflineResources {
   service: ServerlessService;
   config: OfflineResourcesProps;
@@ -64,7 +77,7 @@ class ServerlessOfflineResources {
   constructor(serverless: Serverless, private options: Options) {
     this.service = serverless.service;
     this.config =
-      (this.service.custom && this.service.custom["offline-resources"]) || {};
+      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
 
     this.dynamoDbPoller = null;
 
@@ -77,21 +90,29 @@ class ServerlessOfflineResources {
     };
   }
 
+  log(message: string, ...optionalParams: any[]) {
+    msg(console.log, this.stage, message, optionalParams);
+  }
+
+  warn(message: string, ...optionalParams: any[]) {
+    msg(console.warn, this.stage, message, optionalParams);
+  }
+
   get endpoint() {
     const config =
-      (this.service.custom && this.service.custom["offline-resources"]) || {};
+      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
     return _.get(config, "endpoint", LOCALSTACK_ENDPOINT);
   }
 
   get region() {
     const config =
-      (this.service.custom && this.service.custom["offline-resources"]) || {};
+      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
     return _.get(config, "region", "us-east-1");
   }
 
   get accessKeyId() {
     const config =
-      (this.service.custom && this.service.custom["offline-resources"]) || {};
+      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
     const val = _.get(config, "accessKeyId", undefined);
 
     if (!val && this.endpoint === LOCALSTACK_ENDPOINT) {
@@ -103,7 +124,7 @@ class ServerlessOfflineResources {
 
   get secretAccessKey() {
     const config =
-      (this.service.custom && this.service.custom["offline-resources"]) || {};
+      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
     const val = _.get(config, "secretAccessKey", undefined);
 
     if (!val && this.endpoint === LOCALSTACK_ENDPOINT) {
@@ -129,7 +150,7 @@ class ServerlessOfflineResources {
 
   async startHandler() {
     if (this.shouldExecute()) {
-      console.log(`[offline-resources][${this.stage}] Starting...`);
+      this.log(`Starting...`);
       const resources = await this.resourcesHandler();
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
     }
@@ -137,7 +158,7 @@ class ServerlessOfflineResources {
 
   async endHandler() {
     if (this.shouldExecute()) {
-      console.log(`[offline-resources][${this.stage}] Ending!`);
+      this.log(`Ending!`);
       if (this.dynamoDbPoller) {
         this.dynamoDbPoller.stop();
       }
@@ -198,9 +219,7 @@ class ServerlessOfflineResources {
     const stackName = `${this.service.service}-${this.stage}`;
 
     try {
-      console.log(
-        `[offline-resources][cloudformation][${stackName}] Creating stack.`
-      );
+      this.log(`[cloudformation][${stackName}] Creating stack.`);
       await clients.cloudformation
         .createStack({
           StackName: stackName,
@@ -221,20 +240,18 @@ class ServerlessOfflineResources {
           },
         })
         .promise();
-      console.log(
-        `[offline-resources][cloudformation][${stackName}] Stack created.`
-      );
+      this.log(`[cloudformation][${stackName}] Stack created.`);
     } catch (createErr: any) {
       if ("name" in createErr && createErr.name !== "ValidationError") {
-        console.warn(
-          `[offline-resources][cloudformation] Unable to create stack - ${createErr.message}`
+        this.warn(
+          `[cloudformation] Unable to create stack - ${createErr.message}`
         );
         throw createErr;
       }
 
       try {
-        console.log(
-          `[offline-resources][cloudformation][${stackName}] Stack already exists. Updating stack.`
+        this.log(
+          `[cloudformation][${stackName}] Stack already exists. Updating stack.`
         );
         await clients.cloudformation
           .updateStack({
@@ -256,12 +273,10 @@ class ServerlessOfflineResources {
           })
           .promise();
 
-        console.log(
-          `[offline-resources][cloudformation][${stackName}] Stack updated.`
-        );
+        this.log(`[cloudformation][${stackName}] Stack updated.`);
       } catch (updateErr: any) {
-        console.warn(
-          `[offline-resources][cloudformation] Unable to update stack - ${updateErr.message}`
+        this.warn(
+          `[cloudformation] Unable to update stack - ${updateErr.message}`
         );
         throw updateErr;
       }
@@ -286,8 +301,8 @@ class ServerlessOfflineResources {
         }
       });
     } catch (err: any) {
-      console.warn(
-        `[offline-resources][cloudformation] Unable to list stack resources - ${err.message}`
+      this.warn(
+        `[cloudformation] Unable to list stack resources - ${err.message}`
       );
       throw err;
     }
@@ -340,8 +355,8 @@ class ServerlessOfflineResources {
       return;
     }
 
-    console.warn(
-      `[offline-resources][dynamodb][${tableKey}] Streaming to functions: ${functions.map(
+    this.warn(
+      `[dynamodb][${tableKey}] Streaming to functions: ${functions.map(
         (f) => f.functionName
       )}`
     );
@@ -377,8 +392,8 @@ class ServerlessOfflineResources {
           InvocationType: "Event",
         })
       );
-    } catch (e) {
-      console.warn("Error invoking", e);
+    } catch (err: any) {
+      this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
     }
   }
 }
