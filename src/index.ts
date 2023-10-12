@@ -64,7 +64,11 @@ export const msg = (
     message = `[${PLUGIN_NAME}][${stage}]${message}`;
   }
   if (obj) {
-    fn(message, JSON.stringify(obj));
+    if (obj instanceof Error) {
+      fn(message, obj.message);
+    } else {
+      fn(message, JSON.stringify(obj));
+    }
   } else {
     fn(message);
   }
