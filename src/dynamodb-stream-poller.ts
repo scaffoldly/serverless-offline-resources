@@ -3,29 +3,31 @@ import {
   DynamoDBStreamsClient,
   GetRecordsCommand,
   GetShardIteratorCommand,
+  _Record,
 } from "@aws-sdk/client-dynamodb-streams";
-
-import { assign } from "lodash/fp";
+import { DynamoDBRecord, DynamoDBStreamEvent } from "aws-lambda";
 
 export type DynamoDbFunctionDefinition = {
   functionName: string;
   batchSize: number;
   maximumRecordAgeInSeconds?: number;
   recordStreamHandler: (
-    records: any[],
+    records: _Record[],
     functionName: string,
     streamArn: string
-  ) => void;
+  ) => Promise<void>;
 };
 
 export class DynamoDBStreamPoller {
   shardIterators: Map<string, string>;
   timeoutIds: Map<string, NodeJS.Timeout>;
-  recordQueues: Map<string, any[]>;
+  recordQueues: Map<string, _Record[]>;
   constructor(
     private client: DynamoDBStreamsClient,
+    private tableName: string,
     private streamArn: string,
-    private functions: DynamoDbFunctionDefinition[] = []
+    private functions: DynamoDbFunctionDefinition[],
+    private warn: (message: string, obj?: any) => void
   ) {
     this.client = client;
     this.streamArn = streamArn;
@@ -67,8 +69,8 @@ export class DynamoDBStreamPoller {
           await this.getRecords(shard.ShardId);
         })
       );
-    } catch (error) {
-      console.warn(error);
+    } catch (e: any) {
+      this.warn(`[dynamodb][${this.tableName}] Unable to create streams`, e);
     }
   }
 
@@ -105,13 +107,16 @@ export class DynamoDBStreamPoller {
               maximumRecordAgeInSeconds !== undefined
             ) {
               const now = Date.now();
-              filteredRecords = filteredRecords.filter((record) => {
+              filteredRecords = filteredRecords.filter(({ dynamodb }) => {
+                if (!dynamodb) {
+                  return false;
+                }
+                const { ApproximateCreationDateTime } = dynamodb;
+                if (!ApproximateCreationDateTime) {
+                  return false;
+                }
                 const recordAgeInSeconds =
-                  (now -
-                    new Date(
-                      record.dynamodb.ApproximateCreationDateTime * 1000
-                    ).getTime()) /
-                  1000;
+                  (now - ApproximateCreationDateTime.getTime()) / 1000;
                 return recordAgeInSeconds <= maximumRecordAgeInSeconds;
               });
             }
@@ -123,8 +128,11 @@ export class DynamoDBStreamPoller {
             );
           })
         );
-      } catch (handlerError) {
-        console.warn(handlerError);
+      } catch (handlerError: any) {
+        this.warn(
+          `[dynamodb][${this.tableName}] Unable to handle records`,
+          handlerError
+        );
       }
 
       if (NextShardIterator) {
@@ -133,18 +141,15 @@ export class DynamoDBStreamPoller {
 
       if (recordQueue.length > 0) {
         this.getRecords(shardId);
-      } else if (NextShardIterator) {
-        this.timeoutIds.set(
-          shardId,
-          setTimeout(() => this.getRecords(shardId), 1000)
-        );
       }
-    } catch (error) {
-      this.timeoutIds.set(
-        shardId,
-        setTimeout(() => this.getRecords(shardId), 1000)
-      );
+    } catch (error: any) {
+      this.warn(`[dynamodb][${this.tableName}] Unable to emit records`, error);
     }
+
+    this.timeoutIds.set(
+      shardId,
+      setTimeout(() => this.getRecords(shardId), 1000)
+    );
   }
 
   stop() {
@@ -152,17 +157,81 @@ export class DynamoDBStreamPoller {
   }
 }
 
-export class StreamEvent {
+export class MappedDynamoDBStreamEvent implements DynamoDBStreamEvent {
+  Records: DynamoDBRecord[];
+
   constructor(
-    public Records: any[],
+    public records: _Record[],
     public region: string,
     public streamArn: string
   ) {
-    this.Records = Records.map(
-      assign({
-        eventSourceARN: streamArn,
-        awsRegion: region,
-      })
-    );
+    this.Records = records.reduce((acc, record) => {
+      const {
+        dynamodb,
+        eventID,
+        eventName,
+        eventSource,
+        eventVersion,
+        userIdentity,
+        awsRegion,
+      } = record;
+      if (
+        !dynamodb ||
+        !eventID ||
+        !eventName ||
+        !eventSource ||
+        !eventVersion ||
+        !userIdentity ||
+        !awsRegion
+      ) {
+        return acc;
+      }
+
+      if (
+        eventName !== "INSERT" &&
+        eventName !== "MODIFY" &&
+        eventName !== "REMOVE"
+      ) {
+        return acc;
+      }
+
+      const { ApproximateCreationDateTime, StreamViewType } = dynamodb;
+
+      if (
+        StreamViewType !== "NEW_AND_OLD_IMAGES" &&
+        StreamViewType !== "NEW_IMAGE" &&
+        StreamViewType !== "OLD_IMAGE" &&
+        StreamViewType !== "KEYS_ONLY"
+      ) {
+        return acc;
+      }
+
+      acc.push({
+        dynamodb: {
+          ApproximateCreationDateTime: ApproximateCreationDateTime
+            ? Math.floor(ApproximateCreationDateTime.getTime() / 1000)
+            : undefined,
+          Keys: dynamodb.Keys as { [key: string]: any },
+          NewImage: dynamodb.NewImage as { [key: string]: any },
+          OldImage: dynamodb.OldImage as { [key: string]: any },
+          SequenceNumber: dynamodb.SequenceNumber,
+          SizeBytes: dynamodb.SizeBytes,
+          StreamViewType,
+        },
+        eventID,
+        eventName,
+        eventSource,
+        eventVersion,
+        userIdentity,
+        awsRegion,
+        eventSourceARN: this.streamArn,
+      });
+
+      return acc;
+    }, [] as DynamoDBRecord[]);
   }
+
+  stringify = (): string => {
+    return JSON.stringify({ Records: this.Records });
+  };
 }

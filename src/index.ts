@@ -1,20 +1,32 @@
 import _ from "lodash";
 import AWS from "aws-sdk";
-import { DynamoDBStreamsClient } from "@aws-sdk/client-dynamodb-streams";
+import {
+  DynamoDBStreamsClient,
+  _Record,
+} from "@aws-sdk/client-dynamodb-streams";
 import {
   DynamoDBStreamPoller,
   DynamoDbFunctionDefinition,
-  StreamEvent,
+  MappedDynamoDBStreamEvent,
 } from "./dynamodb-stream-poller";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { Message } from "@aws-sdk/client-sqs";
+import {
+  MappedSQSEvent,
+  SqsFunctionDefinition,
+  SqsQueuePoller,
+} from "./sqs-queue-poller";
+import { SQSClient } from "@aws-sdk/client-sqs";
 
-const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
+export const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 const PLUGIN_NAME = "offline-resources";
 
 type SupportedResources =
   | "AWS::DynamoDB::Table"
   | "AWS::SNS::Topic"
   | "AWS::SQS::Queue";
+
+type StackResources = { [key in SupportedResources]: StackResource[] };
 
 type OfflineResourcesProps = {
   endpoint?: string;
@@ -77,19 +89,19 @@ export const msg = (
 class ServerlessOfflineResources {
   service: ServerlessService;
   config: OfflineResourcesProps;
-  dynamoDbPoller: DynamoDBStreamPoller | null;
   provider: "aws";
   hooks: {
     "before:offline:start": () => void;
     "before:offline:start:end": () => void;
   };
 
+  dynamoDbPoller?: DynamoDBStreamPoller;
+  sqsQueuePoller?: SqsQueuePoller;
+
   constructor(serverless: Serverless, private options: Options) {
     this.service = serverless.service;
     this.config =
       (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
-
-    this.dynamoDbPoller = null;
 
     this.options = options;
     this.provider = "aws";
@@ -163,6 +175,7 @@ class ServerlessOfflineResources {
       this.log(`Starting...`);
       const resources = await this.resourcesHandler();
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
+      await this.sqsHandler(resources["AWS::SQS::Queue"]);
     }
   }
 
@@ -172,6 +185,9 @@ class ServerlessOfflineResources {
       if (this.dynamoDbPoller) {
         this.dynamoDbPoller.stop();
       }
+      if (this.sqsQueuePoller) {
+        this.sqsQueuePoller.stop();
+      }
     }
   }
 
@@ -179,46 +195,8 @@ class ServerlessOfflineResources {
     return _.get(this.service, "resources", {});
   }
 
-  getFunctionsWithStreamEvent(type: "dynamodb", key: string) {
-    return this.service.getAllFunctions().reduce((acc, functionName) => {
-      const functionObject = this.service.getFunction(functionName);
-      // find functions with events with "stream" and type "dynamodb"
-      const event = functionObject.events.find(
-        (event: {
-          stream: { type: string; arn: { [x: string]: string[] } };
-        }) => {
-          if (
-            event.stream &&
-            event.stream.type === type &&
-            event.stream.arn &&
-            event.stream.arn["Fn::GetAtt"] &&
-            event.stream.arn["Fn::GetAtt"][0] === key &&
-            event.stream.arn["Fn::GetAtt"][1] === "StreamArn"
-          ) {
-            return true;
-          }
-          return false;
-        }
-      );
-
-      if (!event) {
-        return acc;
-      }
-
-      acc.push({
-        functionName: functionObject.name,
-        // TODO Slice on error and other properties
-        batchSize: event.batchSize || 1,
-        maximumRecordAgeInSeconds: event.maximumRecordAgeInSeconds || undefined,
-        recordStreamHandler: this.emitStreamRecords.bind(this),
-      });
-
-      return acc;
-    }, [] as DynamoDbFunctionDefinition[]);
-  }
-
-  async resourcesHandler() {
-    let stackResources: { [key in SupportedResources]: StackResource[] } = {
+  async resourcesHandler(): Promise<StackResources> {
+    let stackResources: StackResources = {
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
@@ -320,14 +298,6 @@ class ServerlessOfflineResources {
     return stackResources;
   }
 
-  async dynamoDbHandler(tables: StackResource[]) {
-    await Promise.all(
-      tables.map(async (table) => {
-        await this.createDynamoDbStreams(table.key, table.id);
-      })
-    );
-  }
-
   clients() {
     let options = {
       endpoint: this.endpoint,
@@ -341,11 +311,60 @@ class ServerlessOfflineResources {
       dynamodb: new AWS.DynamoDB(options),
       dynamodbstreams: new DynamoDBStreamsClient(options),
       sns: new AWS.SNS(options),
-      sqs: new AWS.SQS(options),
+      sqs: new SQSClient(options),
     };
   }
 
-  async createDynamoDbStreams(tableKey: string, tableName: string) {
+  async dynamoDbHandler(tables: StackResource[]) {
+    await Promise.all(
+      tables.map(async (table) => {
+        await this.createDynamoDbStreamPoller(table.key, table.id);
+      })
+    );
+  }
+
+  getFunctionsWithStreamEvent(type: "dynamodb", key: string) {
+    return this.service.getAllFunctions().reduce((acc, functionName) => {
+      const functionObject = this.service.getFunction(functionName);
+      // TODO: support tables created outside of the stack
+      const event = functionObject.events.find(
+        (event: {
+          stream?: { type?: string; arn?: { [x: string]: string[] } };
+        }) => {
+          if (
+            event.stream &&
+            event.stream.type === type &&
+            event.stream.arn &&
+            event.stream.arn["Fn::GetAtt"] &&
+            event.stream.arn["Fn::GetAtt"][0] === key &&
+            event.stream.arn["Fn::GetAtt"][1] === "StreamArn"
+          ) {
+            return true;
+          }
+          return false;
+        }
+      );
+
+      if (!event) {
+        return acc;
+      }
+
+      acc.push({
+        functionName: functionObject.name,
+        // TODO Slice on error and other properties
+        batchSize: event.batchSize || 1,
+        maximumRecordAgeInSeconds: event.maximumRecordAgeInSeconds || undefined,
+        recordStreamHandler: this.emitStreamRecords.bind(this),
+      });
+
+      return acc;
+    }, [] as DynamoDbFunctionDefinition[]);
+  }
+
+  async createDynamoDbStreamPoller(
+    tableKey: string,
+    tableName: string
+  ): Promise<void> {
     const functions = this.getFunctionsWithStreamEvent("dynamodb", tableKey);
 
     const clients = this.clients();
@@ -365,7 +384,7 @@ class ServerlessOfflineResources {
       return;
     }
 
-    this.warn(
+    this.log(
       `[dynamodb][${tableKey}] Streaming to functions: ${functions.map(
         (f) => f.functionName
       )}`
@@ -373,15 +392,17 @@ class ServerlessOfflineResources {
 
     this.dynamoDbPoller = new DynamoDBStreamPoller(
       clients.dynamodbstreams,
+      tableName,
       streamArn,
-      functions
+      functions,
+      this.warn.bind(this)
     );
 
-    await this.dynamoDbPoller.start();
+    return this.dynamoDbPoller.start();
   }
 
   async emitStreamRecords(
-    records: any[],
+    records: _Record[],
     functionName: string,
     streamArn: string
   ) {
@@ -393,17 +414,123 @@ class ServerlessOfflineResources {
       apiVersion: "2015-03-31",
       endpoint: "http://localhost:3002",
     });
-    const event = new StreamEvent(records, this.region, streamArn);
+    const event = new MappedDynamoDBStreamEvent(
+      records,
+      this.region,
+      streamArn
+    );
     try {
       client.send(
         new InvokeCommand({
           FunctionName: functionName,
-          Payload: JSON.stringify(event),
+          Payload: event.stringify(),
           InvocationType: "Event",
         })
       );
+      // TODO: Slice on errors and other settings?
     } catch (err: any) {
       this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
+    }
+  }
+
+  async sqsHandler(queues: StackResource[]) {
+    await Promise.all(
+      queues.map(async (queue) => {
+        await this.createSqsPoller(queue.key, queue.id);
+      })
+    );
+  }
+
+  getFunctionsWithSqsEvent(key: string) {
+    return this.service.getAllFunctions().reduce((acc, functionName) => {
+      const functionObject = this.service.getFunction(functionName);
+      // TODO: support queues created outside of the stack
+      const event = functionObject.events.find(
+        (event: { sqs?: { arn?: { [x: string]: string[] } } }) => {
+          if (
+            event.sqs &&
+            event.sqs.arn &&
+            event.sqs.arn["Fn::GetAtt"] &&
+            event.sqs.arn["Fn::GetAtt"][0] === key &&
+            event.sqs.arn["Fn::GetAtt"][1] === "Arn"
+          ) {
+            return true;
+          }
+          return false;
+        }
+      );
+
+      if (!event) {
+        return acc;
+      }
+
+      acc.push({
+        functionName: functionObject.name,
+        batchSize: event.batchSize || 1,
+        // TODO: Filters and others?
+        recordHandler: this.emitQueueRecords.bind(this),
+      });
+      return acc;
+    }, [] as SqsFunctionDefinition[]);
+  }
+
+  async createSqsPoller(queueKey: string, queueUrl: string): Promise<void> {
+    const functions = this.getFunctionsWithSqsEvent(queueKey);
+
+    const clients = this.clients();
+
+    this.log(
+      `[sqs][${queueKey}] Emitting to functions: ${functions.map(
+        (f) => f.functionName
+      )}`
+    );
+
+    this.sqsQueuePoller = new SqsQueuePoller(
+      clients.sqs,
+      this.region,
+      queueUrl,
+      functions,
+      this.log.bind(this)
+    );
+
+    return this.sqsQueuePoller.start();
+  }
+
+  async emitQueueRecords(
+    records: Message[],
+    functionName: string,
+    queueArn: string
+  ): Promise<string[]> {
+    if (!records || !records.length) {
+      return [];
+    }
+
+    const client = new LambdaClient({
+      region: "us-east-1",
+      apiVersion: "2015-03-31",
+      endpoint: "http://localhost:3002",
+    });
+
+    const event = new MappedSQSEvent(records, this.region, queueArn);
+    try {
+      await client.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          Payload: event.stringify(),
+          InvocationType: "Event",
+        })
+      );
+
+      return records.reduce((acc, record) => {
+        if (record.ReceiptHandle) {
+          acc.push(record.ReceiptHandle);
+        }
+        return acc;
+      }, [] as string[]);
+    } catch (err: any) {
+      this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
+      // TODO: DLQ or Retries?
+      return [];
     }
   }
 }
