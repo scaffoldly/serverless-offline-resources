@@ -5,7 +5,7 @@ import {
   Message,
 } from "@aws-sdk/client-sqs";
 
-import { SQSEvent, SQSMessageAttributes, SQSRecord } from "aws-lambda";
+import { SQSEvent, SQSRecord } from "aws-lambda";
 
 export type SqsFunctionDefinition = {
   functionName: string;
