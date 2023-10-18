@@ -53,12 +53,14 @@ export class SqsQueuePoller {
     this.queueArn = convertUrlToArn(queueUrl, region);
   }
 
+  // Doesn't really need to be async but its consistent with other poller start() methods
   async start() {
-    await Promise.all(
-      this.functions.map(async (functionDefinition) => {
-        await this.getRecords(functionDefinition);
-      })
-    );
+    this.functions.map(async (functionDefinition) => {
+      this.timeoutIds.set(
+        functionDefinition.functionName,
+        setTimeout(() => this.getRecords(functionDefinition), 1000)
+      );
+    });
   }
 
   async getRecords(functionDefinition: SqsFunctionDefinition) {
@@ -66,6 +68,9 @@ export class SqsQueuePoller {
       console.log(
         `!!! Getting records for ${functionDefinition.functionName} from ${this.queueUrl}`
       );
+
+      // The error from vendia
+      // Waiting on startup
 
       const result = await this.client.send(
         new ReceiveMessageCommand({
@@ -190,6 +195,7 @@ export class MappedSQSEvent implements SQSEvent {
   }
 
   stringify = (): string => {
+    console.log("!!! Records: ", JSON.stringify({ Records: this.Records }));
     return JSON.stringify({ Records: this.Records });
   };
 }

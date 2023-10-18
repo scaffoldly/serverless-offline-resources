@@ -64,17 +64,19 @@ export class DynamoDBStreamPoller {
         this.recordQueues.set(shard.ShardId, []);
       }
 
-      await Promise.all(
-        Shards.map(async (shard) => {
-          await this.getRecords(shard.ShardId);
-        })
-      );
+      Shards.map(async ({ ShardId }) => {
+        if (!ShardId) return;
+        this.timeoutIds.set(
+          ShardId,
+          setTimeout(() => this.getRecords(ShardId), 1000)
+        );
+      });
     } catch (e: any) {
       this.warn(`[dynamodb][${this.tableName}] Unable to create streams`, e);
     }
   }
 
-  async getRecords(shardId: string | undefined) {
+  async getRecords(shardId: string) {
     if (!shardId) return;
 
     try {
