@@ -405,7 +405,7 @@ class ServerlessOfflineResources {
     records: _Record[],
     functionName: string,
     streamArn: string
-  ) {
+  ): Promise<void> {
     if (!records || !records.length) {
       return;
     }
@@ -419,6 +419,11 @@ class ServerlessOfflineResources {
       this.region,
       streamArn
     );
+
+    if (!event.hasRecords()) {
+      return;
+    }
+
     try {
       client.send(
         new InvokeCommand({
@@ -501,10 +506,6 @@ class ServerlessOfflineResources {
     functionName: string,
     queueArn: string
   ): Promise<string[]> {
-    console.log(
-      `!!! handling records from ${queueArn} to ${functionName}`,
-      JSON.stringify(records, null, 2)
-    );
     if (!records || !records.length) {
       return [];
     }
@@ -516,6 +517,10 @@ class ServerlessOfflineResources {
     });
 
     const event = new MappedSQSEvent(records, this.region, queueArn);
+    if (!event.hasRecords()) {
+      return [];
+    }
+
     try {
       await client.send(
         new InvokeCommand({

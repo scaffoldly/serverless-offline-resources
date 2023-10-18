@@ -65,24 +65,12 @@ export class SqsQueuePoller {
 
   async getRecords(functionDefinition: SqsFunctionDefinition) {
     try {
-      console.log(
-        `!!! Getting records for ${functionDefinition.functionName} from ${this.queueUrl}`
-      );
-
-      // The error from vendia
-      // Waiting on startup
-
       const result = await this.client.send(
         new ReceiveMessageCommand({
           QueueUrl: this.queueUrl,
           MaxNumberOfMessages: functionDefinition.batchSize,
           WaitTimeSeconds: 30, // TODO from function timeout / check AWS docs for defaults
         })
-      );
-
-      console.log(
-        "!!! Received messages: ",
-        JSON.stringify(result.Messages, null, 2)
       );
 
       if (result.Messages && result.Messages.length > 0) {
@@ -132,59 +120,26 @@ export class MappedSQSEvent implements SQSEvent {
         ReceiptHandle: receiptHandle,
         Body: body,
         Attributes: attributes,
-        MessageAttributes: messageAttributesInternal,
         MD5OfBody: md5OfBody,
       } = record;
 
-      if (
-        !messageId ||
-        !receiptHandle ||
-        !body ||
-        !attributes ||
-        !messageAttributesInternal ||
-        !md5OfBody
-      ) {
+      if (!messageId || !receiptHandle || !body || !md5OfBody) {
         return acc;
       }
-
-      const messageAttributes = Object.entries(
-        messageAttributesInternal
-      ).reduce(
-        (
-          acc,
-          [
-            key,
-            {
-              StringValue: stringValue,
-              BinaryValue: binaryValueUInt8Array,
-              DataType: dataType,
-            },
-          ]
-        ) => {
-          if (!dataType) {
-            return acc;
-          }
-
-          const binaryValue = binaryValueUInt8Array
-            ? this.textDecoder.decode(binaryValueUInt8Array)
-            : undefined;
-
-          acc[key] = {
-            stringValue,
-            binaryValue,
-            dataType,
-          };
-          return acc;
-        },
-        {} as SQSMessageAttributes
-      );
 
       acc.push({
         messageId,
         receiptHandle,
         body,
-        attributes,
-        messageAttributes,
+        attributes: attributes
+          ? attributes
+          : {
+              ApproximateReceiveCount: "1", // TODO: make accurate
+              SentTimestamp: `${new Date().getTime()}`, // TODO: make accurate
+              SenderId: "serverless-offline-localstack",
+              ApproximateFirstReceiveTimestamp: `${new Date().getTime()}`, // TODO: make accurate
+            },
+        messageAttributes: {},
         md5OfBody,
         eventSource: "aws:sqs",
         eventSourceARN: arn,
@@ -195,7 +150,10 @@ export class MappedSQSEvent implements SQSEvent {
   }
 
   stringify = (): string => {
-    console.log("!!! Records: ", JSON.stringify({ Records: this.Records }));
     return JSON.stringify({ Records: this.Records });
+  };
+
+  hasRecords = (): boolean => {
+    return this.Records.length > 0;
   };
 }

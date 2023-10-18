@@ -236,4 +236,8 @@ export class MappedDynamoDBStreamEvent implements DynamoDBStreamEvent {
   stringify = (): string => {
     return JSON.stringify({ Records: this.Records });
   };
+
+  hasRecords = (): boolean => {
+    return this.Records.length > 0;
+  };
 }
