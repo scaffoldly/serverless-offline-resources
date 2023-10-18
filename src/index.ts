@@ -54,7 +54,22 @@ type ServerlessService = {
   };
   resources: any;
   getAllFunctions: () => string[];
-  getFunction: (functionName: string) => any;
+  getFunction: (functionName: string) => {
+    name: string;
+    events?: {
+      stream?: {
+        type?: string;
+        batchSize?: number;
+        maximumRecordAgeInSeconds: number;
+        arn?: { [x: string]: string[] };
+      };
+      sqs?: {
+        batchSize?: number;
+        maximumBatchingWindow?: number;
+        arn?: { [x: string]: string[] };
+      };
+    }[];
+  };
 };
 
 type Serverless = {
@@ -328,34 +343,29 @@ class ServerlessOfflineResources {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support tables created outside of the stack
-      const event = functionObject.events.find(
-        (event: {
-          stream?: { type?: string; arn?: { [x: string]: string[] } };
-        }) => {
-          if (
-            event.stream &&
-            event.stream.type === type &&
-            event.stream.arn &&
-            event.stream.arn["Fn::GetAtt"] &&
-            event.stream.arn["Fn::GetAtt"][0] === key &&
-            event.stream.arn["Fn::GetAtt"][1] === "StreamArn"
-          ) {
-            return true;
-          }
-          return false;
-        }
-      );
-
-      if (!event) {
+      const { events } = functionObject;
+      if (!events) {
         return acc;
       }
 
-      acc.push({
-        functionName: functionObject.name,
-        // TODO Slice on error and other properties
-        batchSize: event.batchSize || 1,
-        maximumRecordAgeInSeconds: event.maximumRecordAgeInSeconds || undefined,
-        recordStreamHandler: this.emitStreamRecords.bind(this),
+      events.forEach(({ stream }) => {
+        if (
+          stream &&
+          stream.type === type &&
+          stream.arn &&
+          stream.arn["Fn::GetAtt"] &&
+          stream.arn["Fn::GetAtt"][0] === key &&
+          stream.arn["Fn::GetAtt"][1] === "StreamArn"
+        ) {
+          acc.push({
+            functionName: functionObject.name,
+            // TODO Slice on error and other properties
+            batchSize: stream.batchSize || 1,
+            maximumRecordAgeInSeconds:
+              stream.maximumRecordAgeInSeconds || undefined,
+            recordStreamHandler: this.emitStreamRecords.bind(this),
+          });
+        }
       });
 
       return acc;
@@ -450,32 +460,29 @@ class ServerlessOfflineResources {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support queues created outside of the stack
-      // TODO: support more than one event
-      const event = functionObject.events.find(
-        (event: { sqs?: { arn?: { [x: string]: string[] } } }) => {
-          if (
-            event.sqs &&
-            event.sqs.arn &&
-            event.sqs.arn["Fn::GetAtt"] &&
-            event.sqs.arn["Fn::GetAtt"][0] === key &&
-            event.sqs.arn["Fn::GetAtt"][1] === "Arn"
-          ) {
-            return true;
-          }
-          return false;
-        }
-      );
-
-      if (!event) {
+      const { events } = functionObject;
+      if (!events) {
         return acc;
       }
 
-      acc.push({
-        functionName: functionObject.name,
-        batchSize: event.batchSize || 1,
-        // TODO: Filters and others?
-        recordHandler: this.emitQueueRecords.bind(this),
+      events.forEach(({ sqs }) => {
+        if (
+          sqs &&
+          sqs.arn &&
+          sqs.arn["Fn::GetAtt"] &&
+          sqs.arn["Fn::GetAtt"][0] === key &&
+          sqs.arn["Fn::GetAtt"][1] === "Arn"
+        ) {
+          acc.push({
+            functionName: functionObject.name,
+            batchSize: sqs.batchSize || 10,
+            waitTime: sqs.maximumBatchingWindow || 0,
+            // TODO: Filters
+            recordHandler: this.emitQueueRecords.bind(this),
+          });
+        }
       });
+
       return acc;
     }, [] as SqsFunctionDefinition[]);
   }

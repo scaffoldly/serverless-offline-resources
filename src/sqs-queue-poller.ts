@@ -10,22 +10,13 @@ import { SQSEvent, SQSRecord } from "aws-lambda";
 export type SqsFunctionDefinition = {
   functionName: string;
   batchSize: number;
+  waitTime: number;
   recordHandler: (
     records: Message[],
     functionName: string,
     queueArn: string
   ) => Promise<string[]>;
 };
-
-// const convertArnToQueueName = (arn: string): string => {
-//   const [, , , , , queueName] = arn.split(":");
-//   return queueName;
-// };
-
-// const convertArnToUrl = (arn: string): string => {
-//   const [, , , , accountId, queueName] = arn.split(":");
-//   return `${LOCALSTACK_ENDPOINT}/${accountId}/${queueName}`;
-// };
 
 export const convertUrlToQueueName = (url: string): string => {
   const [, , , , queueName] = url.split("/");
@@ -69,7 +60,7 @@ export class SqsQueuePoller {
         new ReceiveMessageCommand({
           QueueUrl: this.queueUrl,
           MaxNumberOfMessages: functionDefinition.batchSize,
-          WaitTimeSeconds: 30, // TODO from function timeout / check AWS docs for defaults
+          WaitTimeSeconds: functionDefinition.waitTime,
         })
       );
 
@@ -136,7 +127,7 @@ export class MappedSQSEvent implements SQSEvent {
           : {
               ApproximateReceiveCount: "1", // TODO: make accurate
               SentTimestamp: `${new Date().getTime()}`, // TODO: make accurate
-              SenderId: "serverless-offline-localstack",
+              SenderId: "serverless-offline-resources", // TODO: make accurate
               ApproximateFirstReceiveTimestamp: `${new Date().getTime()}`, // TODO: make accurate
             },
         messageAttributes: {},
