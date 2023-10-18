@@ -175,6 +175,7 @@ class ServerlessOfflineResources {
     if (this.shouldExecute()) {
       this.log(`Starting...`);
       const resources = await this.resourcesHandler();
+      console.log("!!! resources", JSON.stringify(resources, null, 2));
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
       await this.sqsHandler(resources["AWS::SQS::Queue"]);
     }
