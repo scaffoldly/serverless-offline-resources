@@ -15,6 +15,7 @@ import {
   MappedSQSEvent,
   SqsFunctionDefinition,
   SqsQueuePoller,
+  convertUrlToQueueName,
 } from "./sqs-queue-poller";
 import { SQSClient } from "@aws-sdk/client-sqs";
 
@@ -385,9 +386,8 @@ class ServerlessOfflineResources {
     }
 
     this.log(
-      `[dynamodb][${tableKey}] Streaming to functions: ${functions.map(
-        (f) => f.functionName
-      )}`
+      `[dynamodb][${tableName}] Streaming to functions:`,
+      functions.map((f) => f.functionName)
     );
 
     this.dynamoDbPoller = new DynamoDBStreamPoller(
@@ -445,6 +445,7 @@ class ServerlessOfflineResources {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support queues created outside of the stack
+      console.log("!!! events", JSON.stringify(functionObject.events, null, 2));
       const event = functionObject.events.find(
         (event: { sqs?: { arn?: { [x: string]: string[] } } }) => {
           if (
@@ -480,9 +481,8 @@ class ServerlessOfflineResources {
     const clients = this.clients();
 
     this.log(
-      `[sqs][${queueKey}] Emitting to functions: ${functions.map(
-        (f) => f.functionName
-      )}`
+      `[sqs][${convertUrlToQueueName(queueUrl)}] Emitting to functions:`,
+      functions.map((f) => f.functionName)
     );
 
     this.sqsQueuePoller = new SqsQueuePoller(
