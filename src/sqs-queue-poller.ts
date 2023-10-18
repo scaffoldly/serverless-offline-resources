@@ -63,12 +63,21 @@ export class SqsQueuePoller {
 
   async getRecords(functionDefinition: SqsFunctionDefinition) {
     try {
+      console.log(
+        `!!! Getting records for ${functionDefinition.functionName} from ${this.queueUrl}`
+      );
+
       const result = await this.client.send(
         new ReceiveMessageCommand({
           QueueUrl: this.queueUrl,
           MaxNumberOfMessages: functionDefinition.batchSize,
-          WaitTimeSeconds: 30,
+          WaitTimeSeconds: 30, // TODO from function timeout / check AWS docs for defaults
         })
+      );
+
+      console.log(
+        "!!! Received messages: ",
+        JSON.stringify(result.Messages, null, 2)
       );
 
       if (result.Messages && result.Messages.length > 0) {

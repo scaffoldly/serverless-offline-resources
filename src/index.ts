@@ -175,7 +175,6 @@ class ServerlessOfflineResources {
     if (this.shouldExecute()) {
       this.log(`Starting...`);
       const resources = await this.resourcesHandler();
-      console.log("!!! resources", JSON.stringify(resources, null, 2));
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
       await this.sqsHandler(resources["AWS::SQS::Queue"]);
     }
@@ -446,7 +445,7 @@ class ServerlessOfflineResources {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support queues created outside of the stack
-      console.log("!!! events", JSON.stringify(functionObject.events, null, 2));
+      // TODO: support more than one event
       const event = functionObject.events.find(
         (event: { sqs?: { arn?: { [x: string]: string[] } } }) => {
           if (
@@ -502,6 +501,10 @@ class ServerlessOfflineResources {
     functionName: string,
     queueArn: string
   ): Promise<string[]> {
+    console.log(
+      `!!! handling records from ${queueArn} to ${functionName}`,
+      JSON.stringify(records, null, 2)
+    );
     if (!records || !records.length) {
       return [];
     }
