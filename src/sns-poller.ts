@@ -1,4 +1,4 @@
-import { SQSClient, Message } from "@aws-sdk/client-sqs";
+import { SQSClient, Message, PurgeQueueCommand } from "@aws-sdk/client-sqs";
 import { SNSClient, SubscribeCommand } from "@aws-sdk/client-sns";
 
 import { SNSEvent, SNSEventRecord } from "aws-lambda";
@@ -29,14 +29,15 @@ export class SnsPoller {
   subscriptionArn?: string;
   constructor(
     private snsClient: SNSClient,
-    sqsClient: SQSClient,
+    private sqsClient: SQSClient,
     region: string,
     private topicArn: string,
-    queueUrl: string,
+    private queueUrl: string,
     private functions: SnsFunctionDefinition[],
     private warn: (message: string, obj?: any) => void
   ) {
     this.topicName = convertArnToTopicName(topicArn);
+    // We can't poll SNS directly, so we'll use SQS as the back channel
     this.sqsQueuePoller = new SqsQueuePoller(
       sqsClient,
       region,
@@ -52,7 +53,13 @@ export class SnsPoller {
   }
 
   async start() {
-    // We can't poll SNS directly, so we'll use SQS as the back channel
+    // Purge the queue
+    await this.sqsClient.send(
+      new PurgeQueueCommand({ QueueUrl: this.queueUrl })
+    );
+
+    // Subscribe
+    // TODO Is this idempotent?
     const subscription = await this.snsClient.send(
       new SubscribeCommand({
         TopicArn: this.topicArn,
