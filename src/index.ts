@@ -213,6 +213,7 @@ class ServerlessOfflineResources {
       const resources = await this.resourcesHandler();
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
       await this.sqsHandler(resources["AWS::SQS::Queue"]);
+      await this.snsHandler(resources["AWS::SNS::Topic"]);
     }
   }
 
@@ -224,6 +225,9 @@ class ServerlessOfflineResources {
       }
       if (this.sqsQueuePoller) {
         this.sqsQueuePoller.stop();
+      }
+      if (this.snsPoller) {
+        this.snsPoller.stop();
       }
     }
   }
