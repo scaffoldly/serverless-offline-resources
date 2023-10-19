@@ -36,8 +36,6 @@ export class SnsPoller {
     private functions: SnsFunctionDefinition[],
     private warn: (message: string, obj?: any) => void
   ) {
-    console.log("!!! functions", functions);
-
     this.topicName = convertArnToTopicName(topicArn);
     // We can't poll SNS directly, so we'll use SQS as the back channel
     this.sqsQueuePoller = new SqsQueuePoller(
@@ -93,14 +91,9 @@ export class SnsPoller {
     records: Message[],
     functionName: string
   ): Promise<string[]> {
-    console.log("!!! functionName", functionName);
-    console.log("!!! records", JSON.stringify(records, null, 2));
-
     if (!records || !records.length) {
       return [];
     }
-
-    console.log("!!! subscriptionArn", this.subscriptionArn);
 
     if (!this.subscriptionArn) {
       return [];
@@ -115,13 +108,10 @@ export class SnsPoller {
       (fn) => fn.functionName === functionName
     );
 
-    console.log("!!! functionDefinitions", functionDefinitions);
-
     const receiptHandles = (
       await Promise.all(
         functionDefinitions.map(async (fn) => {
           try {
-            console.log("!!! emitting to function", fn.functionName);
             await fn.recordHandler(event, fn.functionName, this.topicArn);
             return records.reduce((acc, record) => {
               if (record.ReceiptHandle) acc.push(record.ReceiptHandle);
@@ -145,8 +135,6 @@ export class MappedSNSEvent implements SNSEvent {
 
   constructor(messages: Message[], subscriptionArn: string) {
     this.Records = messages.reduce((acc, record) => {
-      console.log("!!! evaluating record", record);
-
       const {
         MessageId: messageId,
         ReceiptHandle: receiptHandle,

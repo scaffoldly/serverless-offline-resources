@@ -64,8 +64,6 @@ export class SqsQueuePoller {
         })
       );
 
-      console.log("!!! Messages", JSON.stringify(result.Messages, null, 2));
-
       if (result.Messages && result.Messages.length > 0) {
         let receiptHandles = await functionDefinition.recordHandler(
           result.Messages,

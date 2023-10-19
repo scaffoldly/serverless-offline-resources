@@ -492,12 +492,12 @@ class ServerlessOfflineResources {
         new InvokeCommand({
           FunctionName: functionName,
           Payload: event.stringify(),
-          InvocationType: "Event",
+          InvocationType: "Event", // TODO: Perhaps RequestResponse for error handling
         })
       );
       // TODO: Slice on errors and other settings?
     } catch (err: any) {
-      this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
+      this.warn(`[lambda][${functionName}] Error invoking`, err);
     }
   }
 
@@ -590,7 +590,7 @@ class ServerlessOfflineResources {
         new InvokeCommand({
           FunctionName: functionName,
           Payload: event.stringify(),
-          InvocationType: "Event",
+          InvocationType: "Event", // TODO: Perhaps RequestResponse for error handling
         })
       );
 
@@ -601,7 +601,7 @@ class ServerlessOfflineResources {
         return acc;
       }, [] as string[]);
     } catch (err: any) {
-      this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
+      this.warn(`[lambda][${functionName}] Error invoking`, err);
       // TODO: DLQ or Retries?
       return [];
     }
@@ -679,7 +679,6 @@ class ServerlessOfflineResources {
     event: MappedSNSEvent,
     functionName: string
   ): Promise<void> {
-    console.log("!!! emit sns event", event);
     if (!event || !event.Records || !event.Records.length) {
       return;
     }
@@ -695,11 +694,11 @@ class ServerlessOfflineResources {
         new InvokeCommand({
           FunctionName: functionName,
           Payload: event.stringify(),
-          InvocationType: "Event",
+          InvocationType: "Event", // TODO: Perhaps RequestResponse for error handling
         })
       );
     } catch (err: any) {
-      this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
+      this.warn(`[lambda][${functionName}] Error invoking`, err);
       // TODO: DLQ or Retries?
       return;
     }
