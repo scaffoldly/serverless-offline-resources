@@ -85,7 +85,7 @@ type ServerlessService = {
         arn?: { [x: string]: string[] };
       };
       sns?: {
-        arn?: string;
+        arn?: { Ref?: string };
         topicName?: string;
       };
     }[];
@@ -427,6 +427,10 @@ class ServerlessOfflineResources {
   ): Promise<void> {
     const functions = this.getFunctionsWithStreamEvent("dynamodb", tableKey);
 
+    if (!functions.length) {
+      return;
+    }
+
     const clients = this.clients();
     const table = await clients.dynamodb
       .describeTable({
@@ -539,6 +543,10 @@ class ServerlessOfflineResources {
   async createSqsPoller(queueKey: string, queueUrl: string): Promise<void> {
     const functions = this.getFunctionsWithSqsEvent(queueKey);
 
+    if (!functions.length) {
+      return;
+    }
+
     const clients = this.clients();
 
     this.log(
@@ -604,14 +612,7 @@ class ServerlessOfflineResources {
       }
 
       events.forEach(({ sns }) => {
-        console.log("!!! sns", JSON.stringify(sns, null, 2));
-        if (
-          sns &&
-          sns.arn &&
-          sns.arn.split(" ").length == 2 &&
-          sns.arn.split(" ")[0].trim() === "!Ref" &&
-          sns.arn.split(" ")[1].trim() === key
-        ) {
+        if (sns && sns.arn && sns.arn.Ref && sns.arn.Ref === key) {
           acc.push({
             functionName: functionObject.name,
             // TODO: Support TopicName
@@ -626,6 +627,10 @@ class ServerlessOfflineResources {
 
   async createSnsPoller(topicKey: string, topicArn: string): Promise<void> {
     const functions = this.getFunctionsWithSnsEvent(topicKey);
+
+    if (!functions.length) {
+      return;
+    }
 
     const clients = this.clients();
 
