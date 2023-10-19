@@ -91,6 +91,8 @@ export class SnsPoller {
     records: Message[],
     functionName: string
   ): Promise<string[]> {
+    console.log("!!! records", JSON.stringify(records, null, 2));
+
     if (!records || !records.length) {
       return [];
     }
