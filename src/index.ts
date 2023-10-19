@@ -17,7 +17,14 @@ import {
   SqsQueuePoller,
   convertUrlToQueueName,
 } from "./sqs-queue-poller";
-import { SQSClient } from "@aws-sdk/client-sqs";
+import { SQSClient, GetQueueUrlCommand } from "@aws-sdk/client-sqs";
+import { SNSClient } from "@aws-sdk/client-sns";
+import {
+  MappedSNSEvent,
+  SnsFunctionDefinition,
+  SnsPoller,
+  convertArnToTopicName,
+} from "./sns-poller";
 
 export const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 const PLUGIN_NAME = "offline-resources";
@@ -46,13 +53,22 @@ type ServerlessCustom = {
   "offline-resources"?: OfflineResourcesProps;
 };
 
+type Resources = {
+  Resources: {
+    [key: string]: {
+      Type: SupportedResources;
+      Properties: any;
+    };
+  };
+};
+
 type ServerlessService = {
   service: string;
   custom?: ServerlessCustom;
   provider: {
     stage: string;
   };
-  resources: any;
+  resources: Resources;
   getAllFunctions: () => string[];
   getFunction: (functionName: string) => {
     name: string;
@@ -67,6 +83,10 @@ type ServerlessService = {
         batchSize?: number;
         maximumBatchingWindow?: number;
         arn?: { [x: string]: string[] };
+      };
+      sns?: {
+        arn?: string;
+        topicName?: string;
       };
     }[];
   };
@@ -113,6 +133,7 @@ class ServerlessOfflineResources {
 
   dynamoDbPoller?: DynamoDBStreamPoller;
   sqsQueuePoller?: SqsQueuePoller;
+  snsPoller?: SnsPoller;
 
   constructor(serverless: Serverless, private options: Options) {
     this.service = serverless.service;
@@ -208,7 +229,31 @@ class ServerlessOfflineResources {
   }
 
   getResources() {
-    return _.get(this.service, "resources", {});
+    const resources = _.get(this.service, "resources");
+    if (
+      !resources ||
+      !resources.Resources ||
+      !Object.entries(resources).length
+    ) {
+      return resources;
+    }
+
+    const { Resources } = resources;
+
+    Object.entries(Resources).reduce((acc, [key, value]) => {
+      if (value.Type === "AWS::SNS::Topic") {
+        // Inject a Queue to Bridge SNS to SQS
+        acc[`${key}Queue`] = {
+          Type: "AWS::SQS::Queue",
+          Properties: {
+            QueueName: `__${key}SNSBridge__`,
+          },
+        };
+      }
+      return acc;
+    }, Resources);
+
+    return resources;
   }
 
   async resourcesHandler(): Promise<StackResources> {
@@ -326,7 +371,7 @@ class ServerlessOfflineResources {
       cloudformation: new AWS.CloudFormation(options),
       dynamodb: new AWS.DynamoDB(options),
       dynamodbstreams: new DynamoDBStreamsClient(options),
-      sns: new AWS.SNS(options),
+      sns: new SNSClient(options),
       sqs: new SQSClient(options),
     };
   }
@@ -502,10 +547,109 @@ class ServerlessOfflineResources {
       this.region,
       queueUrl,
       functions,
-      this.log.bind(this)
+      this.warn.bind(this)
     );
 
     return this.sqsQueuePoller.start();
+  }
+
+  async emitSnsEvent(
+    event: MappedSNSEvent,
+    functionName: string
+  ): Promise<void> {
+    if (!event || !event.Records || !event.Records.length) {
+      return;
+    }
+
+    const client = new LambdaClient({
+      region: "us-east-1",
+      apiVersion: "2015-03-31",
+      endpoint: "http://localhost:3002",
+    });
+
+    try {
+      await client.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          Payload: event.stringify(),
+          InvocationType: "Event",
+        })
+      );
+    } catch (err: any) {
+      this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
+      // TODO: DLQ or Retries?
+      return;
+    }
+  }
+
+  async snsHandler(topics: StackResource[]) {
+    await Promise.all(
+      topics.map(async (topic) => {
+        await this.createSnsPoller(topic.key, topic.id);
+      })
+    );
+  }
+
+  getFunctionsWithSnsEvent(key: string) {
+    return this.service.getAllFunctions().reduce((acc, functionName) => {
+      const functionObject = this.service.getFunction(functionName);
+      // TODO: support topics created outside of the stack
+      const { events } = functionObject;
+      if (!events) {
+        return acc;
+      }
+
+      events.forEach(({ sns }) => {
+        if (
+          sns &&
+          sns.arn &&
+          sns.arn.split(" ").length == 2 &&
+          sns.arn.split(" ")[0].trim() === `!Ref` &&
+          sns.arn.split(" ")[1].trim() === key
+        ) {
+          acc.push({
+            functionName: functionObject.name,
+            // TODO: Filters
+            recordHandler: this.emitSnsEvent.bind(this),
+          });
+        }
+      });
+
+      return acc;
+    }, [] as SnsFunctionDefinition[]);
+  }
+
+  async createSnsPoller(topicKey: string, topicArn: string): Promise<void> {
+    const functions = this.getFunctionsWithSnsEvent(topicKey);
+
+    const clients = this.clients();
+
+    this.log(
+      `[sns][${convertArnToTopicName(topicArn)}] Emitting to functions:`,
+      functions.map((f) => f.functionName)
+    );
+
+    const queue = await clients.sqs.send(
+      new GetQueueUrlCommand({
+        QueueName: `__${topicKey}SNSBridge__`,
+      })
+    );
+
+    if (!queue.QueueUrl) {
+      return;
+    }
+
+    this.snsPoller = new SnsPoller(
+      clients.sns,
+      clients.sqs,
+      this.region,
+      topicArn,
+      queue.QueueUrl,
+      functions,
+      this.warn.bind(this)
+    );
+
+    return this.snsPoller.start();
   }
 
   async emitQueueRecords(
