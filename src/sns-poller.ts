@@ -97,6 +97,8 @@ export class SnsPoller {
       return [];
     }
 
+    console.log("!!! subscriptionArn", this.subscriptionArn);
+
     if (!this.subscriptionArn) {
       return [];
     }
@@ -137,6 +139,8 @@ export class MappedSNSEvent implements SNSEvent {
 
   constructor(messages: Message[], subscriptionArn: string) {
     this.Records = messages.reduce((acc, record) => {
+      console.log("!!! evaluating record", record);
+
       const {
         MessageId: messageId,
         ReceiptHandle: receiptHandle,
