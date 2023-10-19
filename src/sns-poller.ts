@@ -36,6 +36,8 @@ export class SnsPoller {
     private functions: SnsFunctionDefinition[],
     private warn: (message: string, obj?: any) => void
   ) {
+    console.log("!!! functions", functions);
+
     this.topicName = convertArnToTopicName(topicArn);
     // We can't poll SNS directly, so we'll use SQS as the back channel
     this.sqsQueuePoller = new SqsQueuePoller(
