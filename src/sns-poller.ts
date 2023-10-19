@@ -59,7 +59,7 @@ export class SnsPoller {
         Protocol: "sqs",
         Endpoint: this.sqsQueuePoller.queueArn,
         Attributes: {
-          RawMessageDelivery: "true",
+          RawMessageDelivery: "false",
         },
       })
     );
