@@ -600,16 +600,17 @@ class ServerlessOfflineResources {
       }
 
       events.forEach(({ sns }) => {
+        console.log("!!! sns", JSON.stringify(sns, null, 2));
         if (
           sns &&
           sns.arn &&
           sns.arn.split(" ").length == 2 &&
-          sns.arn.split(" ")[0].trim() === `!Ref` &&
+          sns.arn.split(" ")[0].trim() === "!Ref" &&
           sns.arn.split(" ")[1].trim() === key
         ) {
           acc.push({
             functionName: functionObject.name,
-            // TODO: Filters
+            // TODO: Support TopicName
             recordHandler: this.emitSnsEvent.bind(this),
           });
         }
