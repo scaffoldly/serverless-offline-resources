@@ -565,12 +565,13 @@ class ServerlessOfflineResources {
     return this.sqsQueuePoller.start();
   }
 
-  async emitSnsEvent(
-    event: MappedSNSEvent,
-    functionName: string
-  ): Promise<void> {
-    if (!event || !event.Records || !event.Records.length) {
-      return;
+  async emitQueueRecords(
+    records: Message[],
+    functionName: string,
+    queueArn: string
+  ): Promise<string[]> {
+    if (!records || !records.length) {
+      return [];
     }
 
     const client = new LambdaClient({
@@ -578,6 +579,11 @@ class ServerlessOfflineResources {
       apiVersion: "2015-03-31",
       endpoint: "http://localhost:3002",
     });
+
+    const event = new MappedSQSEvent(records, this.region, queueArn);
+    if (!event.hasRecords()) {
+      return [];
+    }
 
     try {
       await client.send(
@@ -587,10 +593,17 @@ class ServerlessOfflineResources {
           InvocationType: "Event",
         })
       );
+
+      return records.reduce((acc, record) => {
+        if (record.ReceiptHandle) {
+          acc.push(record.ReceiptHandle);
+        }
+        return acc;
+      }, [] as string[]);
     } catch (err: any) {
       this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
       // TODO: DLQ or Retries?
-      return;
+      return [];
     }
   }
 
@@ -662,13 +675,13 @@ class ServerlessOfflineResources {
     return this.snsPoller.start();
   }
 
-  async emitQueueRecords(
-    records: Message[],
-    functionName: string,
-    queueArn: string
-  ): Promise<string[]> {
-    if (!records || !records.length) {
-      return [];
+  async emitSnsEvent(
+    event: MappedSNSEvent,
+    functionName: string
+  ): Promise<void> {
+    console.log("!!! emit sns event", event);
+    if (!event || !event.Records || !event.Records.length) {
+      return;
     }
 
     const client = new LambdaClient({
@@ -676,11 +689,6 @@ class ServerlessOfflineResources {
       apiVersion: "2015-03-31",
       endpoint: "http://localhost:3002",
     });
-
-    const event = new MappedSQSEvent(records, this.region, queueArn);
-    if (!event.hasRecords()) {
-      return [];
-    }
 
     try {
       await client.send(
@@ -690,17 +698,10 @@ class ServerlessOfflineResources {
           InvocationType: "Event",
         })
       );
-
-      return records.reduce((acc, record) => {
-        if (record.ReceiptHandle) {
-          acc.push(record.ReceiptHandle);
-        }
-        return acc;
-      }, [] as string[]);
     } catch (err: any) {
       this.warn(`[lambda][${functionName}] Error invoking -- ${err.message}`);
       // TODO: DLQ or Retries?
-      return [];
+      return;
     }
   }
 }

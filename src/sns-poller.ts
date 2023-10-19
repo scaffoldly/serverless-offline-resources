@@ -112,10 +112,13 @@ export class SnsPoller {
       fn.functionName === functionName;
     });
 
+    console.log("!!! functionDefinitions", functionDefinitions);
+
     const receiptHandles = (
       await Promise.all(
         functionDefinitions.map(async (fn) => {
           try {
+            console.log("!!! emitting to function", fn.functionName);
             await fn.recordHandler(event, fn.functionName, this.topicArn);
             return records.reduce((acc, record) => {
               if (record.ReceiptHandle) acc.push(record.ReceiptHandle);
