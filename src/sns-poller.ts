@@ -93,6 +93,7 @@ export class SnsPoller {
     records: Message[],
     functionName: string
   ): Promise<string[]> {
+    console.log("!!! functionName", functionName);
     console.log("!!! records", JSON.stringify(records, null, 2));
 
     if (!records || !records.length) {
@@ -110,9 +111,9 @@ export class SnsPoller {
       return [];
     }
 
-    const functionDefinitions = this.functions.filter((fn) => {
-      fn.functionName === functionName;
-    });
+    const functionDefinitions = this.functions.filter(
+      (fn) => fn.functionName === functionName
+    );
 
     console.log("!!! functionDefinitions", functionDefinitions);
 
