@@ -494,11 +494,14 @@ class ServerlessOfflineResources {
     if (!records || !records.length) {
       return;
     }
+
+    console.log("!!! building lambda client");
     const client = new LambdaClient({
       region: "us-east-1",
       apiVersion: "2015-03-31",
       endpoint: "http://localhost:3002",
     });
+
     const event = new MappedDynamoDBStreamEvent(
       records,
       this.region,
@@ -506,6 +509,7 @@ class ServerlessOfflineResources {
     );
 
     if (!event.hasRecords()) {
+      console.log("!!! event has no records");
       return;
     }
 
