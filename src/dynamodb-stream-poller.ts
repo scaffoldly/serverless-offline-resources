@@ -123,6 +123,7 @@ export class DynamoDBStreamPoller {
               });
             }
 
+            console.log("!!! calling stream handler");
             await functionConfig.recordStreamHandler(
               filteredRecords,
               functionConfig.functionName,

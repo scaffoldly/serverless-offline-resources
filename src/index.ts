@@ -490,6 +490,7 @@ class ServerlessOfflineResources {
     functionName: string,
     streamArn: string
   ): Promise<void> {
+    console.log("!!! emitStreamRecords", JSON.stringify(records, null, 2));
     if (!records || !records.length) {
       return;
     }
@@ -509,6 +510,7 @@ class ServerlessOfflineResources {
     }
 
     try {
+      console.log("!!! invoking lambda", functionName, event.stringify());
       await client.send(
         new InvokeCommand({
           FunctionName: functionName,
