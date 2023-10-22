@@ -67,6 +67,7 @@ type ServerlessService = {
   custom?: ServerlessCustom;
   provider: {
     stage: string;
+    environment?: { [key: string]: string };
   };
   resources: Resources;
   getAllFunctions: () => string[];
@@ -211,6 +212,7 @@ class ServerlessOfflineResources {
     if (this.shouldExecute()) {
       this.log(`Starting...`);
       const resources = await this.resourcesHandler();
+      await this.updateEnvironment(resources);
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
       await this.sqsHandler(resources["AWS::SQS::Queue"]);
       await this.snsHandler(resources["AWS::SNS::Topic"]);
@@ -258,6 +260,25 @@ class ServerlessOfflineResources {
     }, Resources);
 
     return resources;
+  }
+
+  async updateEnvironment(resources: StackResources) {
+    console.log("!!! environment", this.service.provider.environment);
+
+    Object.entries(resources).forEach(([type, _resources]) => {
+      let searchFor: string | undefined = undefined;
+      switch (type) {
+        case "AWS::DynamoDB::Table":
+          searchFor = "TABLE_NAME";
+          break;
+        case "AWS::SNS::Topic":
+          searchFor = "TOPIC_ARN";
+          break;
+        case "AWS::SQS::Queue":
+          searchFor = "QUEUE_URL";
+          break;
+      }
+    });
   }
 
   async resourcesHandler(): Promise<StackResources> {
