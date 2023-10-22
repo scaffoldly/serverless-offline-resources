@@ -25,7 +25,6 @@ import {
   SnsPoller,
   convertArnToTopicName,
 } from "./sns-poller";
-import { type } from "os";
 
 export const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 const PLUGIN_NAME = "offline-resources";
