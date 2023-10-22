@@ -77,6 +77,7 @@ export class DynamoDBStreamPoller {
   }
 
   async getRecords(shardId: string) {
+    console.log("!!! getting records", shardId);
     if (!shardId) return;
 
     try {
@@ -167,6 +168,7 @@ export class MappedDynamoDBStreamEvent implements DynamoDBStreamEvent {
     public region: string,
     public streamArn: string
   ) {
+    console.log("!!! ddb records", records);
     this.Records = records.reduce((acc, record) => {
       const {
         dynamodb,

@@ -263,8 +263,6 @@ class ServerlessOfflineResources {
   }
 
   async updateEnvironment(stackResources: StackResources) {
-    console.log("!!! environment", this.service.provider.environment);
-
     Object.values(stackResources).forEach((stackResource) => {
       Object.values(stackResource).forEach((resource) => {
         this.service.provider.environment = Object.entries(
@@ -281,8 +279,6 @@ class ServerlessOfflineResources {
         }, this.service.provider.environment || {});
       });
     });
-
-    console.log("!!! new environment", this.service.provider.environment);
   }
 
   async resourcesHandler(): Promise<StackResources> {
@@ -494,6 +490,7 @@ class ServerlessOfflineResources {
     functionName: string,
     streamArn: string
   ): Promise<void> {
+    console.log("!!! emitting records", JSON.stringify(records, null, 2));
     if (!records || !records.length) {
       return;
     }
