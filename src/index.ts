@@ -25,6 +25,7 @@ import {
   SnsPoller,
   convertArnToTopicName,
 } from "./sns-poller";
+import { type } from "os";
 
 export const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
 const PLUGIN_NAME = "offline-resources";
@@ -67,7 +68,7 @@ type ServerlessService = {
   custom?: ServerlessCustom;
   provider: {
     stage: string;
-    environment?: { [key: string]: string };
+    environment?: { [key: string]: string | { Ref?: string } };
   };
   resources: Resources;
   getAllFunctions: () => string[];
@@ -267,12 +268,14 @@ class ServerlessOfflineResources {
 
     Object.values(stackResources).forEach((stackResource) => {
       Object.values(stackResource).forEach((resource) => {
-        const searchFor = `{ Ref: ${resource.key} }`;
         this.service.provider.environment = Object.entries(
           this.service.provider.environment || {}
         ).reduce((acc, [key, value]) => {
-          console.log(`!!! ${key}: ## ${value} ##`);
-          if (value === searchFor) {
+          if (
+            typeof value !== "string" &&
+            value.Ref &&
+            value.Ref === resource.key
+          ) {
             acc[key] = resource.id;
           }
           return acc;
