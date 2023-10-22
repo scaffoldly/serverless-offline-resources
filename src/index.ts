@@ -265,19 +265,19 @@ class ServerlessOfflineResources {
   async updateEnvironment(resources: StackResources) {
     console.log("!!! environment", this.service.provider.environment);
 
-    Object.entries(resources).forEach(([type, _resources]) => {
-      let searchFor: string | undefined = undefined;
-      switch (type) {
-        case "AWS::DynamoDB::Table":
-          searchFor = "TABLE_NAME";
-          break;
-        case "AWS::SNS::Topic":
-          searchFor = "TOPIC_ARN";
-          break;
-        case "AWS::SQS::Queue":
-          searchFor = "QUEUE_URL";
-          break;
-      }
+    Object.entries(resources).forEach(([_type, _resources]) => {
+      // let searchFor: string | undefined = undefined;
+      // switch (type) {
+      //   case "AWS::DynamoDB::Table":
+      //     searchFor = "TABLE_NAME";
+      //     break;
+      //   case "AWS::SNS::Topic":
+      //     searchFor = "TOPIC_ARN";
+      //     break;
+      //   case "AWS::SQS::Queue":
+      //     searchFor = "QUEUE_URL";
+      //     break;
+      // }
     });
   }
 
