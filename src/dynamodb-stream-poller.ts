@@ -187,6 +187,7 @@ export class MappedDynamoDBStreamEvent implements DynamoDBStreamEvent {
         !userIdentity ||
         !awsRegion
       ) {
+        console.log("!!! missing required fields");
         return acc;
       }
 
@@ -195,6 +196,7 @@ export class MappedDynamoDBStreamEvent implements DynamoDBStreamEvent {
         eventName !== "MODIFY" &&
         eventName !== "REMOVE"
       ) {
+        console.log("!!! missing eventName");
         return acc;
       }
 
@@ -206,6 +208,7 @@ export class MappedDynamoDBStreamEvent implements DynamoDBStreamEvent {
         StreamViewType !== "OLD_IMAGE" &&
         StreamViewType !== "KEYS_ONLY"
       ) {
+        console.log("!!! incorrect StreamViewType");
         return acc;
       }
 
