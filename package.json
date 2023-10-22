@@ -1,6 +1,6 @@
 {
   "name": "serverless-offline-resources",
-  "version": "0.1.9-4",
+  "version": "0.1.9-5",
   "engines": {
     "node": ">=16"
   },
