@@ -490,12 +490,10 @@ class ServerlessOfflineResources {
     functionName: string,
     streamArn: string
   ): Promise<void> {
-    console.log("!!! emitStreamRecords", JSON.stringify(records, null, 2));
     if (!records || !records.length) {
       return;
     }
 
-    console.log("!!! building lambda client");
     const client = new LambdaClient({
       region: "us-east-1",
       apiVersion: "2015-03-31",
@@ -509,12 +507,10 @@ class ServerlessOfflineResources {
     );
 
     if (!event.hasRecords()) {
-      console.log("!!! event has no records");
       return;
     }
 
     try {
-      console.log("!!! invoking lambda", functionName, event.stringify());
       await client.send(
         new InvokeCommand({
           FunctionName: functionName,
