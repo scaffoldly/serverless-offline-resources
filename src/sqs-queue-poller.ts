@@ -121,25 +121,14 @@ export class MappedSQSEvent implements SQSEvent {
         messageId,
         receiptHandle,
         body,
-        attributes: attributes
-          ? {
-              AWSTraceHeader: attributes.AWSTraceHeader,
-              ApproximateReceiveCount: attributes.ApproximateReceiveCount,
-              SentTimestamp: attributes.SentTimestamp,
-              SenderId: attributes.SenderId,
-              ApproximateFirstReceiveTimestamp:
-                attributes.ApproximateFirstReceiveTimestamp,
-              SequenceNumber: attributes.SequenceNumber,
-              MessageGroupId: attributes.MessageGroupId,
-              MessageDeduplicationId: attributes.MessageDeduplicationId,
-              DeadLetterQueueSourceArn: attributes.DeadLetterQueueSourceArn,
-            }
-          : {
-              ApproximateReceiveCount: "1", // TODO: make accurate
-              SentTimestamp: `${new Date().getTime()}`, // TODO: make accurate
-              SenderId: "serverless-offline-resources", // TODO: make accurate
-              ApproximateFirstReceiveTimestamp: `${new Date().getTime()}`, // TODO: make accurate
-            },
+        attributes: {
+          ApproximateReceiveCount: attributes?.ApproximateReceiveCount || "1", // TODO: make accurate
+          SentTimestamp: attributes?.SentTimestamp || `${new Date().getTime()}`, // TODO: make accurate
+          SenderId: attributes?.SenderId || "serverless-offline-resources", // TODO: make accurate
+          ApproximateFirstReceiveTimestamp:
+            attributes?.ApproximateFirstReceiveTimestamp ||
+            `${new Date().getTime()}`, // TODO: make accurate
+        },
         messageAttributes: {},
         md5OfBody,
         eventSource: "aws:sqs",
