@@ -117,13 +117,23 @@ export class MappedSQSEvent implements SQSEvent {
       if (!messageId || !receiptHandle || !body || !md5OfBody) {
         return acc;
       }
-
       acc.push({
         messageId,
         receiptHandle,
         body,
         attributes: attributes
-          ? attributes
+          ? {
+              AWSTraceHeader: attributes.AWSTraceHeader,
+              ApproximateReceiveCount: attributes.ApproximateReceiveCount,
+              SentTimestamp: attributes.SentTimestamp,
+              SenderId: attributes.SenderId,
+              ApproximateFirstReceiveTimestamp:
+                attributes.ApproximateFirstReceiveTimestamp,
+              SequenceNumber: attributes.SequenceNumber,
+              MessageGroupId: attributes.MessageGroupId,
+              MessageDeduplicationId: attributes.MessageDeduplicationId,
+              DeadLetterQueueSourceArn: attributes.DeadLetterQueueSourceArn,
+            }
           : {
               ApproximateReceiveCount: "1", // TODO: make accurate
               SentTimestamp: `${new Date().getTime()}`, // TODO: make accurate
