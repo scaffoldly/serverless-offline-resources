@@ -144,8 +144,6 @@ class ServerlessOfflineResources {
     this.options = options;
     this.provider = "aws";
 
-    console.log("!!! serverless", serverless);
-
     this.hooks = {
       "before:offline:start:init": this.startHandler.bind(this),
       "before:offline:start:end": this.endHandler.bind(this),
@@ -204,8 +202,6 @@ class ServerlessOfflineResources {
   }
 
   shouldExecute() {
-    console.log("!!! this.config", this.config);
-    console.log("!!! this.stage", this.stage);
     if (this.config.stages && this.config.stages.includes(this.stage)) {
       return true;
     }
