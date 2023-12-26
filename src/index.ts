@@ -128,7 +128,7 @@ class ServerlessOfflineResources {
   config: OfflineResourcesProps;
   provider: "aws";
   hooks: {
-    "before:offline:start": () => void;
+    "before:offline:start:init": () => void;
     "before:offline:start:end": () => void;
   };
 
@@ -147,7 +147,7 @@ class ServerlessOfflineResources {
     console.log("!!! serverless", serverless);
 
     this.hooks = {
-      "before:offline:start": this.startHandler.bind(this),
+      "before:offline:start:init": this.startHandler.bind(this),
       "before:offline:start:end": this.endHandler.bind(this),
     };
   }
