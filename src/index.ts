@@ -144,6 +144,8 @@ class ServerlessOfflineResources {
     this.options = options;
     this.provider = "aws";
 
+    console.log("!!! serverless", serverless);
+
     this.hooks = {
       "before:offline:start": this.startHandler.bind(this),
       "before:offline:start:end": this.endHandler.bind(this),
