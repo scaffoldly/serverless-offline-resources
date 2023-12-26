@@ -202,6 +202,8 @@ class ServerlessOfflineResources {
   }
 
   shouldExecute() {
+    console.log("!!! this.config", this.config);
+    console.log("!!! this.stage", this.stage);
     if (this.config.stages && this.config.stages.includes(this.stage)) {
       return true;
     }
