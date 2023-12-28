@@ -182,6 +182,9 @@ class ServerlessOfflineResources {
   async startHandler() {
     this.log(`Starting...`);
     const resources = await this.resourcesHandler();
+
+    console.log("!!!! this.config", this.config);
+
     if (
       this.config.cloudformation === undefined ||
       this.config.cloudformation === true ||
