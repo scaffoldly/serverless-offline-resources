@@ -181,9 +181,12 @@ class ServerlessOfflineResources {
 
   async startHandler() {
     this.log(`Starting...`);
-    const resources = await this.resourcesHandler();
 
-    console.log("!!!! this.config", this.config);
+    let resources: StackResources = {
+      "AWS::DynamoDB::Table": [],
+      "AWS::SNS::Topic": [],
+      "AWS::SQS::Queue": [],
+    };
 
     if (
       this.config.cloudformation === undefined ||
@@ -191,8 +194,12 @@ class ServerlessOfflineResources {
       (Array.isArray(this.config.cloudformation) &&
         this.config.cloudformation.includes(this.stage))
     ) {
-      await this.updateEnvironment(resources);
+      resources = await this.cloudformationHandler();
+    } else {
+      // TODO: Enrich things with IDs if not using cloudformation
     }
+
+    await this.updateEnvironment(resources);
 
     if (
       this.config.poll === undefined ||
@@ -310,7 +317,7 @@ class ServerlessOfflineResources {
     });
   }
 
-  async resourcesHandler(): Promise<StackResources> {
+  async cloudformationHandler(): Promise<StackResources> {
     let stackResources: StackResources = {
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
