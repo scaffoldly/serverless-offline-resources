@@ -41,7 +41,14 @@ type OfflineResourcesProps = {
   region?: string;
   accessKeyId?: string;
   secretAccessKey?: string;
-  stages?: string[];
+  sessionToken?: string;
+  cloudformation?: boolean | string[];
+  uniqueId?: string;
+  poll?: {
+    dynamodb?: boolean | string[];
+    sqs?: boolean | string[];
+    sns?: boolean | string[];
+  };
 };
 
 type StackResource = {
@@ -57,7 +64,12 @@ type Resources = {
   Resources: {
     [key: string]: {
       Type: SupportedResources;
-      Properties: any;
+      Properties?: {
+        Name?: string;
+        TableName?: string;
+        QueueName?: string;
+        TopicName?: string;
+      };
     };
   };
 };
@@ -194,6 +206,18 @@ class ServerlessOfflineResources {
     return val;
   }
 
+  get sessionToken() {
+    const config =
+      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
+    const val = _.get(config, "sessionToken", undefined);
+
+    if (!val && this.endpoint === LOCALSTACK_ENDPOINT) {
+      return undefined;
+    }
+
+    return val;
+  }
+
   get stage() {
     return (
       (this.options && this.options.stage) ||
@@ -201,36 +225,65 @@ class ServerlessOfflineResources {
     );
   }
 
-  shouldExecute() {
-    if (this.config.stages && this.config.stages.includes(this.stage)) {
-      return true;
-    }
-    return false;
-  }
-
   async startHandler() {
-    if (this.shouldExecute()) {
-      this.log(`Starting...`);
-      const resources = await this.resourcesHandler();
+    this.log(`Starting...`);
+    const resources = await this.resourcesHandler();
+    if (
+      this.config.cloudformation === undefined ||
+      this.config.cloudformation === true ||
+      (Array.isArray(this.config.cloudformation) &&
+        this.config.cloudformation.includes(this.stage))
+    ) {
       await this.updateEnvironment(resources);
+    }
+
+    if (
+      this.config.poll === undefined ||
+      this.config.poll.dynamodb === undefined ||
+      this.config.poll.dynamodb === true ||
+      (Array.isArray(this.config.poll.dynamodb) &&
+        this.config.poll.dynamodb.includes(this.stage))
+    ) {
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
+    }
+
+    if (
+      this.config.poll === undefined ||
+      this.config.poll.sqs === undefined ||
+      this.config.poll.sqs === true ||
+      (Array.isArray(this.config.poll.sqs) &&
+        this.config.poll.sqs.includes(this.stage))
+    ) {
       await this.sqsHandler(resources["AWS::SQS::Queue"]);
+    }
+
+    if (
+      this.config.poll === undefined ||
+      this.config.poll.sns === undefined ||
+      this.config.poll.sns === true ||
+      (Array.isArray(this.config.poll.sns) &&
+        this.config.poll.sns.includes(this.stage))
+    ) {
       await this.snsHandler(resources["AWS::SNS::Topic"]);
     }
   }
 
+  uniqueify(name: string, separator = "-") {
+    return `${
+      this.config.uniqueId ? `${this.config.uniqueId}${separator}` : ""
+    }${name}`;
+  }
+
   async endHandler() {
-    if (this.shouldExecute()) {
-      this.log(`Ending!`);
-      if (this.dynamoDbPoller) {
-        this.dynamoDbPoller.stop();
-      }
-      if (this.sqsQueuePoller) {
-        this.sqsQueuePoller.stop();
-      }
-      if (this.snsPoller) {
-        this.snsPoller.stop();
-      }
+    this.log(`Ending!`);
+    if (this.dynamoDbPoller) {
+      this.dynamoDbPoller.stop();
+    }
+    if (this.sqsQueuePoller) {
+      this.sqsQueuePoller.stop();
+    }
+    if (this.snsPoller) {
+      this.snsPoller.stop();
     }
   }
 
@@ -247,15 +300,34 @@ class ServerlessOfflineResources {
     const { Resources } = resources;
 
     Object.entries(Resources).reduce((acc, [key, value]) => {
+      if (value.Properties && value.Properties.Name) {
+        value.Properties.Name = this.uniqueify(value.Properties.Name);
+      }
+
+      if (value.Properties && value.Properties.TableName) {
+        value.Properties.TableName = this.uniqueify(value.Properties.TableName);
+      }
+
+      if (value.Properties && value.Properties.QueueName) {
+        value.Properties.QueueName = this.uniqueify(value.Properties.QueueName);
+      }
+
+      if (value.Properties && value.Properties.TopicName) {
+        value.Properties.TopicName = this.uniqueify(value.Properties.TopicName);
+      }
+
       if (value.Type === "AWS::SNS::Topic") {
         // Inject a Queue to Bridge SNS to SQS
         acc[`${key}Queue`] = {
           Type: "AWS::SQS::Queue",
           Properties: {
-            QueueName: `__${key}SNSBridge__`,
+            QueueName: `__${this.uniqueify(key, "_")}SNSBridge__`,
           },
         };
       }
+
+      acc[key] = value;
+
       return acc;
     }, Resources);
 
@@ -290,7 +362,7 @@ class ServerlessOfflineResources {
 
     const clients = this.clients();
     // const resources = this.resources;
-    const stackName = `${this.service.service}-${this.stage}`;
+    const stackName = this.uniqueify(`${this.service.service}-${this.stage}`);
 
     try {
       this.log(`[cloudformation][${stackName}] Creating stack.`);
@@ -390,6 +462,7 @@ class ServerlessOfflineResources {
       region: this.region,
       accessKeyId: this.accessKeyId,
       secretAccessKey: this.secretAccessKey,
+      sessionToken: this.sessionToken,
     };
 
     return {
@@ -677,7 +750,7 @@ class ServerlessOfflineResources {
 
     const queue = await clients.sqs.send(
       new GetQueueUrlCommand({
-        QueueName: `__${topicKey}SNSBridge__`,
+        QueueName: `__${this.uniqueify(topicKey, "_")}SNSBridge__`,
       })
     );
 
