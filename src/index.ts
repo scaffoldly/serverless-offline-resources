@@ -37,11 +37,7 @@ type SupportedResources =
 type StackResources = { [key in SupportedResources]: StackResource[] };
 
 type OfflineResourcesProps = {
-  endpoint?: string;
   region?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  sessionToken?: string;
   cloudformation?: boolean | string[];
   uniqueId?: string;
   poll?: {
@@ -170,52 +166,10 @@ class ServerlessOfflineResources {
     msg(console.warn, this.stage, message, obj);
   }
 
-  get endpoint() {
-    const config =
-      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
-    return _.get(config, "endpoint", LOCALSTACK_ENDPOINT);
-  }
-
   get region() {
     const config =
       (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
     return _.get(config, "region", "us-east-1");
-  }
-
-  get accessKeyId() {
-    const config =
-      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
-    const val = _.get(config, "accessKeyId", undefined);
-
-    if (!val && this.endpoint === LOCALSTACK_ENDPOINT) {
-      return "test";
-    }
-
-    return val;
-  }
-
-  get secretAccessKey() {
-    const config =
-      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
-    const val = _.get(config, "secretAccessKey", undefined);
-
-    if (!val && this.endpoint === LOCALSTACK_ENDPOINT) {
-      return "test";
-    }
-
-    return val;
-  }
-
-  get sessionToken() {
-    const config =
-      (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
-    const val = _.get(config, "sessionToken", undefined);
-
-    if (!val && this.endpoint === LOCALSTACK_ENDPOINT) {
-      return undefined;
-    }
-
-    return val;
   }
 
   get stage() {
@@ -458,11 +412,7 @@ class ServerlessOfflineResources {
 
   clients() {
     let options = {
-      endpoint: this.endpoint,
       region: this.region,
-      accessKeyId: this.accessKeyId,
-      secretAccessKey: this.secretAccessKey,
-      sessionToken: this.sessionToken,
     };
 
     return {
