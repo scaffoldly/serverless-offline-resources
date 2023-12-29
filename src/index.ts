@@ -132,10 +132,12 @@ export const msg = (
 };
 
 class ServerlessOfflineResources {
+  started: boolean;
   service: ServerlessService;
   config: OfflineResourcesProps;
   provider: "aws";
   hooks: {
+    "before:offline:start": () => void;
     "before:offline:start:init": () => void;
     "before:offline:start:end": () => void;
   };
@@ -145,6 +147,8 @@ class ServerlessOfflineResources {
   snsPoller?: SnsPoller;
 
   constructor(serverless: Serverless, private options: Options) {
+    this.started = false;
+
     this.service = serverless.service;
     this.config =
       (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
@@ -153,6 +157,7 @@ class ServerlessOfflineResources {
     this.provider = "aws";
 
     this.hooks = {
+      "before:offline:start": this.startHandler.bind(this),
       "before:offline:start:init": this.startHandler.bind(this),
       "before:offline:start:end": this.endHandler.bind(this),
     };
@@ -180,6 +185,11 @@ class ServerlessOfflineResources {
   }
 
   async startHandler() {
+    if (this.started) {
+      return;
+    }
+    this.started = true;
+
     this.log(`Starting...`);
 
     let resources: StackResources = {
