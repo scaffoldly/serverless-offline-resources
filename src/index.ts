@@ -432,20 +432,17 @@ class ServerlessOfflineResources {
 
   clients() {
     let endpoint: string | undefined = undefined;
-    let accessKeyId: string | undefined = undefined;
-    let secretAccessKey: string | undefined = undefined;
+    let credentials: AWS.Credentials | undefined = undefined;
 
     if (process.env.LOCALSTACK === "true") {
       endpoint = LOCALSTACK_ENDPOINT;
-      accessKeyId = "test";
-      secretAccessKey = "test";
+      credentials = new AWS.Credentials("test", "test");
     }
 
     let options = {
       region: this.region,
       endpoint,
-      accessKeyId,
-      secretAccessKey,
+      credentials,
     };
 
     return {
