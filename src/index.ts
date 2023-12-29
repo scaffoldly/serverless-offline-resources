@@ -395,10 +395,12 @@ class ServerlessOfflineResources {
 
         this.log(`[cloudformation][${stackName}] Stack updated.`);
       } catch (updateErr: any) {
-        this.warn(
-          `[cloudformation] Unable to update stack - ${updateErr.message}`
-        );
-        throw updateErr;
+        if ("name" in updateErr && updateErr.name !== "ValidationError") {
+          this.warn(
+            `[cloudformation] Unable to update stack - ${updateErr.message}`
+          );
+          throw createErr;
+        }
       }
     }
 
