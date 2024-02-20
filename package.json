@@ -25,6 +25,7 @@
     "@types/node": ">=16",
     "aws-sdk": ">=2",
     "lodash": ">=4",
+    "ts-retry-promise": "^0.8.0",
     "typescript": ">=5"
   },
   "devDependencies": {

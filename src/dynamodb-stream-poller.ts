@@ -6,6 +6,7 @@ import {
   _Record,
 } from "@aws-sdk/client-dynamodb-streams";
 import { DynamoDBRecord, DynamoDBStreamEvent } from "aws-lambda";
+import { retry } from "ts-retry-promise";
 
 export type DynamoDbFunctionDefinition = {
   functionName: string;
@@ -46,22 +47,25 @@ export class DynamoDBStreamPoller {
       const Shards = (StreamDescription || {}).Shards || [];
 
       for (const shard of (StreamDescription || {}).Shards || []) {
-        if (!shard.SequenceNumberRange || !shard.ShardId) {
+        const { SequenceNumberRange, ShardId } = shard;
+        if (!SequenceNumberRange || !ShardId) {
           continue;
         }
-        const { ShardIterator } = await this.client.send(
-          new GetShardIteratorCommand({
-            ShardId: shard.ShardId,
-            ShardIteratorType: "LATEST",
-            StreamArn: this.streamArn,
-            SequenceNumber: shard.SequenceNumberRange.StartingSequenceNumber,
-          })
+        const { ShardIterator } = await retry(() =>
+          this.client.send(
+            new GetShardIteratorCommand({
+              ShardId: ShardId,
+              ShardIteratorType: "LATEST",
+              StreamArn: this.streamArn,
+              SequenceNumber: SequenceNumberRange.StartingSequenceNumber,
+            })
+          )
         );
 
         if (!ShardIterator) continue;
 
-        this.shardIterators.set(shard.ShardId, ShardIterator);
-        this.recordQueues.set(shard.ShardId, []);
+        this.shardIterators.set(ShardId, ShardIterator);
+        this.recordQueues.set(ShardId, []);
       }
 
       Shards.map(async ({ ShardId }) => {

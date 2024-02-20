@@ -362,7 +362,11 @@ class ServerlessOfflineResources {
         .promise();
       this.log(`[cloudformation][${stackName}] Stack created.`);
     } catch (createErr: any) {
-      if ("name" in createErr && createErr.name !== "ValidationError") {
+      if (
+        "name" in createErr &&
+        createErr.name !== "ValidationError" &&
+        createErr.name !== "AlreadyExistsException"
+      ) {
         this.warn(
           `[cloudformation] Unable to create stack - ${createErr.message}`
         );
