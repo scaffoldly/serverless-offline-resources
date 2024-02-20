@@ -26,7 +26,8 @@ import {
   convertArnToTopicName,
 } from "./sns-poller";
 
-export const LOCALSTACK_ENDPOINT = "http://localhost.localstack.cloud:4566";
+export const LOCALSTACK_ENDPOINT =
+  process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
 const PLUGIN_NAME = "offline-resources";
 
 type SupportedResources =
