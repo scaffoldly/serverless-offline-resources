@@ -96,12 +96,12 @@ interface SQSResource {
 interface EventBridgeResource {
   Type: "AWS::Events::Rule";
   Properties: {
-    Id: string;
     Name: string;
     State: "ENABLED";
     ScheduleExpression?: string;
     // TODO: inputs
     Targets: {
+      Id: string;
       Arn: { "Fn::GetAtt": string[] };
     }[];
   };
@@ -405,12 +405,12 @@ class ServerlessOfflineResources {
         Type: "AWS::Events::Rule",
         Properties: {
           Name: fn.ruleName,
-          Id: `${fn.ruleName}-target`,
           State: "ENABLED",
           ScheduleExpression: fn.schedule,
           // TODO Patterns
           Targets: [
             {
+              Id: `${fn.ruleName}-target`,
               Arn: {
                 "Fn::GetAtt": [queueKey, "Arn"],
               },
