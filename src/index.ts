@@ -99,6 +99,7 @@ interface EventBridgeResource {
     Name: string;
     State: "ENABLED";
     ScheduleExpression?: string;
+    // TODO: inputs
     Targets: {
       Arn: { "Fn::GetAtt": string[] };
     }[];
@@ -928,6 +929,7 @@ class ServerlessOfflineResources {
           acc.push({
             functionName: functionObject.name,
             ruleName: ruleName || `${functionName}-${ix}`,
+            schedule: eventBridge.schedule,
             // TODO: Support TopicName
             recordHandler: this.emitEventBridgeEvent.bind(this),
           });
