@@ -30,6 +30,7 @@ import {
   EventBridgePoller,
   MappedEventBridgeEvent,
 } from "./eventbridge-poller";
+import { retry } from "ts-retry-promise";
 
 export const LOCALSTACK_ENDPOINT =
   process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
@@ -204,6 +205,9 @@ class ServerlessOfflineResources {
   constructor(serverless: Serverless, private options: Options) {
     this.started = false;
 
+    console.log("!!! serverless", serverless);
+    console.log("!!! options", options);
+
     this.service = serverless.service;
     this.config =
       (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
@@ -261,7 +265,7 @@ class ServerlessOfflineResources {
       (Array.isArray(this.config.cloudformation) &&
         this.config.cloudformation.includes(this.stage))
     ) {
-      resources = await this.cloudformationHandler();
+      resources = await retry(async () => await this.cloudformationHandler());
     } else {
       // TODO: Enrich things with IDs if not using cloudformation
     }
@@ -933,6 +937,8 @@ class ServerlessOfflineResources {
         ) {
           acc.push({
             functionName: functionObject.name,
+            // todo: make input work
+            // todo: fix name: stack-webapp-express-rule-5
             ruleName: ruleName || `${functionName}-${ix}`,
             schedule: eventBridge.schedule,
             input: eventBridge.input,
