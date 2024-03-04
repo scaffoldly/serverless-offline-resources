@@ -283,7 +283,7 @@ class ServerlessOfflineResources {
       (Array.isArray(this.config.poll.eventbridge) &&
         this.config.poll.eventbridge.includes(this.stage))
     ) {
-      await this.eventBridgeHandler(resources["AWS::SNS::Topic"]);
+      await this.eventBridgeHandler(resources["AWS::Events::Rule"]);
     }
 
     if (
