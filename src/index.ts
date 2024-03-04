@@ -99,11 +99,11 @@ interface EventBridgeResource {
     Name: string;
     State: "ENABLED";
     ScheduleExpression?: string;
-    Input?: string;
     // TODO: inputs
     Targets: {
       Id: string;
       Arn: { "Fn::GetAtt": string[] };
+      Input?: string;
     }[];
   };
 }
@@ -409,7 +409,6 @@ class ServerlessOfflineResources {
           Name: fn.ruleName,
           State: "ENABLED",
           ScheduleExpression: fn.schedule,
-          Input: fn.input ? JSON.stringify(fn.input) : undefined,
           // TODO Patterns
           Targets: [
             {
@@ -417,6 +416,7 @@ class ServerlessOfflineResources {
               Arn: {
                 "Fn::GetAtt": [queueKey, "Arn"],
               },
+              Input: fn.input ? JSON.stringify(fn.input) : undefined,
             },
           ],
         },
