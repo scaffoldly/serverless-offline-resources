@@ -202,6 +202,8 @@ class ServerlessOfflineResources {
   snsPoller?: SnsPoller;
   eventBridgePoller?: EventBridgePoller;
 
+  serviceName: string;
+
   constructor(serverless: Serverless, private options: Options) {
     this.started = false;
 
@@ -209,6 +211,7 @@ class ServerlessOfflineResources {
     console.log("!!! options", options);
 
     this.service = serverless.service;
+    this.serviceName = this.service.service;
     this.config =
       (this.service.custom && this.service.custom[PLUGIN_NAME]) || {};
 
@@ -923,6 +926,7 @@ class ServerlessOfflineResources {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support topics created outside of the stack
       const { events } = functionObject;
+      console.log("!!! checking function", functionObject);
       if (!events) {
         return acc;
       }
