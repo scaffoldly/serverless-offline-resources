@@ -207,9 +207,6 @@ class ServerlessOfflineResources {
   constructor(serverless: Serverless, private options: Options) {
     this.started = false;
 
-    console.log("!!! serverless", serverless);
-    console.log("!!! options", options);
-
     this.service = serverless.service;
     this.serviceName = this.service.service;
     this.config =
@@ -926,10 +923,13 @@ class ServerlessOfflineResources {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support topics created outside of the stack
       const { events } = functionObject;
-      console.log("!!! checking function", functionObject);
       if (!events) {
         return acc;
       }
+
+      const serviceName = this.service.service;
+      const shortName = functionName.split("-").slice(-1)[0];
+      const stage = this.stage;
 
       events.forEach(({ eventBridge }, ix) => {
         if (
@@ -942,8 +942,8 @@ class ServerlessOfflineResources {
           acc.push({
             functionName: functionObject.name,
             // todo: make input work
-            // todo: fix name: stack-webapp-express-rule-5
-            ruleName: ruleName || `${functionName}-${ix}`,
+            ruleName:
+              ruleName || `${serviceName}-${shortName}-${stage}-rule-${ix + 1}`,
             schedule: eventBridge.schedule,
             input: eventBridge.input,
             // TODO: Support TopicName
