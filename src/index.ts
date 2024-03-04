@@ -932,18 +932,19 @@ class ServerlessOfflineResources {
       const stage = this.stage;
 
       events.forEach(({ eventBridge }, ix) => {
+        const generatedRuleName = `${serviceName}-${shortName}-${stage}-rule-${
+          ix + 1
+        }`;
         if (
           (eventBridge && !ruleName) ||
           (eventBridge &&
             ruleName &&
-            (eventBridge.name === ruleName ||
-              `${functionName}-${ix}` === ruleName))
+            (eventBridge.name === ruleName || generatedRuleName === ruleName))
         ) {
           acc.push({
             functionName: functionObject.name,
             // todo: make input work
-            ruleName:
-              ruleName || `${serviceName}-${shortName}-${stage}-rule-${ix + 1}`,
+            ruleName: ruleName || generatedRuleName,
             schedule: eventBridge.schedule,
             input: eventBridge.input,
             // TODO: Support TopicName
