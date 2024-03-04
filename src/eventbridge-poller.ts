@@ -8,6 +8,7 @@ export type EventBridgeFunctionDefinition = {
   functionName: string;
   ruleName: string;
   schedule?: string;
+  input?: { [key: string]: string }; // TODO Support Refs
   recordHandler: (
     event: MappedEventBridgeEvent,
     functionName: string,

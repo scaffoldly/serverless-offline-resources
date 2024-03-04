@@ -99,6 +99,7 @@ interface EventBridgeResource {
     Name: string;
     State: "ENABLED";
     ScheduleExpression?: string;
+    Input?: string;
     // TODO: inputs
     Targets: {
       Id: string;
@@ -148,6 +149,7 @@ type ServerlessService = {
       eventBridge?: {
         name?: string;
         schedule?: string;
+        input?: { [key: string]: string };
       };
     }[];
   };
@@ -407,6 +409,7 @@ class ServerlessOfflineResources {
           Name: fn.ruleName,
           State: "ENABLED",
           ScheduleExpression: fn.schedule,
+          Input: fn.input ? JSON.stringify(fn.input) : undefined,
           // TODO Patterns
           Targets: [
             {
@@ -932,6 +935,7 @@ class ServerlessOfflineResources {
             functionName: functionObject.name,
             ruleName: ruleName || `${functionName}-${ix}`,
             schedule: eventBridge.schedule,
+            input: eventBridge.input,
             // TODO: Support TopicName
             recordHandler: this.emitEventBridgeEvent.bind(this),
           });
