@@ -25,15 +25,22 @@ import {
   SnsPoller,
   convertArnToTopicName,
 } from "./sns-poller";
+import {
+  EventBridgeFunctionDefinition,
+  EventBridgePoller,
+  MappedEventBridgeEvent,
+} from "./eventbridge-poller";
 
 export const LOCALSTACK_ENDPOINT =
   process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
 const PLUGIN_NAME = "offline-resources";
 
 type SupportedResources =
+  | "AWS::SecretsManager::Secret"
   | "AWS::DynamoDB::Table"
   | "AWS::SNS::Topic"
-  | "AWS::SQS::Queue";
+  | "AWS::SQS::Queue"
+  | "AWS::Events::Rule";
 
 type StackResources = { [key in SupportedResources]: StackResource[] };
 
@@ -43,6 +50,7 @@ type OfflineResourcesProps = {
   uniqueId?: string;
   poll?: {
     dynamodb?: boolean | string[];
+    eventbridge?: boolean | string[];
     sqs?: boolean | string[];
     sns?: boolean | string[];
   };
@@ -57,17 +65,57 @@ type ServerlessCustom = {
   "offline-resources"?: OfflineResourcesProps;
 };
 
+interface SecretsManagerResource {
+  Type: "AWS::SecretsManager::Secret";
+  Properties: {
+    Name: string;
+  };
+}
+
+interface DynamoDBResource {
+  Type: "AWS::DynamoDB::Table";
+  Properties: {
+    TableName: string;
+  };
+}
+
+interface SNSResource {
+  Type: "AWS::SNS::Topic";
+  Properties: {
+    TopicName: string;
+  };
+}
+
+interface SQSResource {
+  Type: "AWS::SQS::Queue";
+  Properties: {
+    QueueName: string;
+  };
+}
+
+interface EventBridgeResource {
+  Type: "AWS::Events::Rule";
+  Properties: {
+    Name: string;
+    State: "ENABLED";
+    ScheduleExpression?: string;
+    // TODO: inputs
+    Targets: {
+      Id: string;
+      Arn: { "Fn::GetAtt": string[] };
+      Input?: string;
+    }[];
+  };
+}
+
 type Resources = {
   Resources: {
-    [key: string]: {
-      Type: SupportedResources;
-      Properties?: {
-        Name?: string;
-        TableName?: string;
-        QueueName?: string;
-        TopicName?: string;
-      };
-    };
+    [key: string]:
+      | SecretsManagerResource
+      | DynamoDBResource
+      | SNSResource
+      | SQSResource
+      | EventBridgeResource;
   };
 };
 
@@ -97,6 +145,11 @@ type ServerlessService = {
       sns?: {
         arn?: { Ref?: string };
         topicName?: string;
+      };
+      eventBridge?: {
+        name?: string;
+        schedule?: string;
+        input?: { [key: string]: string };
       };
     }[];
   };
@@ -146,6 +199,7 @@ class ServerlessOfflineResources {
   dynamoDbPoller?: DynamoDBStreamPoller;
   sqsQueuePoller?: SqsQueuePoller;
   snsPoller?: SnsPoller;
+  eventBridgePoller?: EventBridgePoller;
 
   constructor(serverless: Serverless, private options: Options) {
     this.started = false;
@@ -194,9 +248,11 @@ class ServerlessOfflineResources {
     this.log(`Starting...`);
 
     let resources: StackResources = {
+      "AWS::SecretsManager::Secret": [],
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
+      "AWS::Events::Rule": [],
     };
 
     if (
@@ -220,6 +276,16 @@ class ServerlessOfflineResources {
         this.config.poll.dynamodb.includes(this.stage))
     ) {
       await this.dynamoDbHandler(resources["AWS::DynamoDB::Table"]);
+    }
+
+    if (
+      this.config.poll === undefined ||
+      this.config.poll.eventbridge === undefined ||
+      this.config.poll.eventbridge === true ||
+      (Array.isArray(this.config.poll.eventbridge) &&
+        this.config.poll.eventbridge.includes(this.stage))
+    ) {
+      await this.eventBridgeHandler(resources["AWS::Events::Rule"]);
     }
 
     if (
@@ -260,6 +326,9 @@ class ServerlessOfflineResources {
     if (this.snsPoller) {
       this.snsPoller.stop();
     }
+    if (this.eventBridgePoller) {
+      this.eventBridgePoller.stop();
+    }
   }
 
   getResources() {
@@ -275,19 +344,35 @@ class ServerlessOfflineResources {
     const { Resources } = resources;
 
     Object.entries(Resources).reduce((acc, [key, value]) => {
-      if (value.Properties && value.Properties.Name) {
+      if (
+        value.Properties &&
+        value.Type === "AWS::SecretsManager::Secret" &&
+        value.Properties.Name
+      ) {
         value.Properties.Name = this.uniqueify(value.Properties.Name);
       }
 
-      if (value.Properties && value.Properties.TableName) {
+      if (
+        value.Properties &&
+        value.Type === "AWS::DynamoDB::Table" &&
+        value.Properties.TableName
+      ) {
         value.Properties.TableName = this.uniqueify(value.Properties.TableName);
       }
 
-      if (value.Properties && value.Properties.QueueName) {
+      if (
+        value.Properties &&
+        value.Type === "AWS::SQS::Queue" &&
+        value.Properties.QueueName
+      ) {
         value.Properties.QueueName = this.uniqueify(value.Properties.QueueName);
       }
 
-      if (value.Properties && value.Properties.TopicName) {
+      if (
+        value.Properties &&
+        value.Type === "AWS::SNS::Topic" &&
+        value.Properties.TopicName
+      ) {
         value.Properties.TopicName = this.uniqueify(value.Properties.TopicName);
       }
 
@@ -305,6 +390,38 @@ class ServerlessOfflineResources {
 
       return acc;
     }, Resources);
+
+    this.getFunctionsWithEventBridgeEvent().forEach((fn) => {
+      const queueKey = `${fn.ruleName}Queue`;
+
+      // Create a queue as the backhaul
+      Resources[queueKey] = {
+        Type: "AWS::SQS::Queue",
+        Properties: {
+          QueueName: `__${this.uniqueify(fn.ruleName, "_")}EventBridge__`,
+        },
+      };
+
+      // Set up a rule to emit to the queue
+      Resources[fn.ruleName] = {
+        Type: "AWS::Events::Rule",
+        Properties: {
+          Name: fn.ruleName,
+          State: "ENABLED",
+          ScheduleExpression: fn.schedule,
+          // TODO Patterns
+          Targets: [
+            {
+              Id: `${fn.ruleName}-target`,
+              Arn: {
+                "Fn::GetAtt": [queueKey, "Arn"],
+              },
+              Input: fn.input ? JSON.stringify(fn.input) : undefined,
+            },
+          ],
+        },
+      };
+    });
 
     return resources;
   }
@@ -330,9 +447,11 @@ class ServerlessOfflineResources {
 
   async cloudformationHandler(): Promise<StackResources> {
     let stackResources: StackResources = {
+      "AWS::SecretsManager::Secret": [],
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
+      "AWS::Events::Rule": [],
     };
 
     const clients = this.clients();
@@ -785,6 +904,115 @@ class ServerlessOfflineResources {
       // TODO: DLQ or Retries?
       return;
     }
+  }
+
+  async eventBridgeHandler(rules: StackResource[]) {
+    await Promise.all(
+      rules.map(async (rule) => {
+        await this.createEventBridgePoller(rule.key);
+      })
+    );
+  }
+
+  getFunctionsWithEventBridgeEvent(ruleName?: string) {
+    return this.service.getAllFunctions().reduce((acc, functionName) => {
+      const functionObject = this.service.getFunction(functionName);
+      // TODO: support topics created outside of the stack
+      const { events } = functionObject;
+      if (!events) {
+        return acc;
+      }
+
+      events.forEach(({ eventBridge }, ix) => {
+        if (
+          (eventBridge && !ruleName) ||
+          (eventBridge &&
+            ruleName &&
+            (eventBridge.name === ruleName ||
+              `${functionName}-${ix}` === ruleName))
+        ) {
+          acc.push({
+            functionName: functionObject.name,
+            ruleName: ruleName || `${functionName}-${ix}`,
+            schedule: eventBridge.schedule,
+            input: eventBridge.input,
+            // TODO: Support TopicName
+            recordHandler: this.emitEventBridgeEvent.bind(this),
+          });
+        }
+      });
+
+      return acc;
+    }, [] as EventBridgeFunctionDefinition[]);
+  }
+
+  async createEventBridgePoller(ruleName: string): Promise<void> {
+    const functions = this.getFunctionsWithEventBridgeEvent(ruleName);
+
+    if (!functions.length) {
+      return;
+    }
+
+    const clients = this.clients();
+
+    this.log(
+      `[eventbridge][${ruleName}] Emitting to functions:`,
+      functions.map((f) => f.functionName)
+    );
+
+    const queue = await clients.sqs.send(
+      new GetQueueUrlCommand({
+        QueueName: `__${this.uniqueify(ruleName, "_")}EventBridge__`,
+      })
+    );
+
+    if (!queue.QueueUrl) {
+      return;
+    }
+
+    this.eventBridgePoller = new EventBridgePoller(
+      clients.sqs,
+      this.region,
+      ruleName,
+      queue.QueueUrl,
+      functions,
+      this.warn.bind(this)
+    );
+
+    return this.eventBridgePoller.start();
+  }
+
+  async emitEventBridgeEvent(
+    event: MappedEventBridgeEvent,
+    functionName: string
+  ): Promise<void> {
+    if (!event || !event.events || !event.events.length) {
+      return;
+    }
+
+    const client = new LambdaClient({
+      region: "us-east-1",
+      apiVersion: "2015-03-31",
+      endpoint: "http://localhost:3002",
+    });
+
+    await Promise.all(
+      event.events.map(async (event) => {
+        try {
+          await client.send(
+            new InvokeCommand({
+              FunctionName: functionName,
+              Payload: JSON.stringify(event),
+              InvocationType: "Event", // TODO: Perhaps RequestResponse for error handling
+            })
+          );
+        } catch (err: any) {
+          this.warn(`[lambda][${functionName}] Error invoking`, err);
+          // TODO: DLQ or Retries?
+          return;
+        }
+      })
+    );
   }
 }
 
