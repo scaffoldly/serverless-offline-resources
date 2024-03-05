@@ -265,7 +265,12 @@ class ServerlessOfflineResources {
       (Array.isArray(this.config.cloudformation) &&
         this.config.cloudformation.includes(this.stage))
     ) {
-      resources = await retry(async () => await this.cloudformationHandler());
+      resources = await retry(async () => await this.cloudformationHandler(), {
+        backoff: "EXPONENTIAL",
+        delay: 1000,
+        maxBackOff: 10000,
+        retries: 5,
+      });
     } else {
       // TODO: Enrich things with IDs if not using cloudformation
     }
