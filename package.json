@@ -22,6 +22,7 @@
     "@aws-sdk/client-sns": "3",
     "@aws-sdk/client-sqs": "3",
     "@types/lodash": "4",
+    "@types/mime": "3",
     "@types/node": "16",
     "aws-sdk": "2",
     "lodash": "4",
