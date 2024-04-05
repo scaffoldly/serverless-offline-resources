@@ -615,10 +615,12 @@ class ServerlessOfflineResources {
   clients() {
     let endpoint: string | undefined = undefined;
     let credentials: AWS.Credentials | undefined = undefined;
+    let forcePathStyle = false;
 
     if (process.env.LOCALSTACK === "true") {
       endpoint = LOCALSTACK_ENDPOINT;
       credentials = new AWS.Credentials("test", "test");
+      forcePathStyle = true;
     }
 
     let options = {
@@ -633,7 +635,7 @@ class ServerlessOfflineResources {
       dynamodbstreams: new DynamoDBStreamsClient(options),
       sns: new SNSClient(options),
       sqs: new SQSClient(options),
-      s3: new S3Client(options),
+      s3: new S3Client({ ...options, forcePathStyle }),
     };
   }
 
