@@ -1,43 +1,35 @@
 import { SQSClient, Message, PurgeQueueCommand } from "@aws-sdk/client-sqs";
-import { SNSClient, SubscribeCommand } from "@aws-sdk/client-sns";
 
-import { SNSEvent, SNSEventRecord } from "aws-lambda";
+import { S3Event, S3EventRecord } from "aws-lambda";
 import { SqsQueuePoller } from "./sqs-queue-poller";
+import {
+  PutBucketNotificationConfigurationCommand,
+  S3Client,
+  Event as BucketEvent,
+} from "@aws-sdk/client-s3";
 
-export type SnsFunctionDefinition = {
+export type S3FunctionDefinition = {
   functionName: string;
+  event: BucketEvent;
   recordHandler: (
-    event: MappedSNSEvent,
+    event: MappedS3Event,
     functionName: string,
-    topicArn: string
+    bucketName: string
   ) => Promise<void>;
 };
 
-export const convertArnToTopicName = (arn: string): string => {
-  const [, , , , , topicName] = arn.split(":");
-  return topicName;
-};
-
-export const convertArnToAccountId = (arn: string): string => {
-  const [, , , , accountId] = arn.split(":");
-  return accountId;
-};
-
-export class SnsPoller {
-  topicName: string;
+export class S3Poller {
   sqsQueuePoller: SqsQueuePoller;
-  subscriptionArn?: string;
   constructor(
-    private snsClient: SNSClient,
+    private s3Client: S3Client,
     private sqsClient: SQSClient,
     region: string,
-    private topicArn: string,
+    private bucketName: string,
     private queueUrl: string,
-    private functions: SnsFunctionDefinition[],
+    private functions: S3FunctionDefinition[],
     private warn: (message: string, obj?: any) => void
   ) {
-    this.topicName = convertArnToTopicName(topicArn);
-    // We can't poll SNS directly, so we'll use SQS as the back channel
+    // We can't poll S3 directly, so we'll use SQS as the back channel
     this.sqsQueuePoller = new SqsQueuePoller(
       sqsClient,
       region,
@@ -58,27 +50,26 @@ export class SnsPoller {
       new PurgeQueueCommand({ QueueUrl: this.queueUrl })
     );
 
-    // Subscribe
-    // TODO Is this idempotent?
-    const subscription = await this.snsClient.send(
-      new SubscribeCommand({
-        TopicArn: this.topicArn,
-        Protocol: "sqs",
-        Endpoint: this.sqsQueuePoller.queueArn,
-        Attributes: {
-          RawMessageDelivery: "false",
+    // Create Bucket Notifications to SQS
+    // TODO: is this idempotent
+    const response = await this.s3Client.send(
+      new PutBucketNotificationConfigurationCommand({
+        Bucket: this.bucketName,
+        NotificationConfiguration: {
+          QueueConfigurations: this.functions.map((fn) => ({
+            QueueArn: this.sqsQueuePoller.queueArn,
+            Events: [fn.event],
+          })),
         },
       })
     );
 
-    const { SubscriptionArn } = subscription;
-
-    if (!SubscriptionArn) {
-      this.warn(`[sns][${this.topicName}] Unable to subscribe to topic`);
+    if (response.$metadata.httpStatusCode !== 200) {
+      this.warn(
+        `[s3][${this.bucketName}] Unable to create bucket notification`
+      );
       return;
     }
-
-    this.subscriptionArn = SubscriptionArn;
 
     await this.sqsQueuePoller.start();
   }
@@ -95,11 +86,7 @@ export class SnsPoller {
       return [];
     }
 
-    if (!this.subscriptionArn) {
-      return [];
-    }
-
-    const event = new MappedSNSEvent(records, this.subscriptionArn);
+    const event = new MappedS3Event(records);
     if (!event.hasRecords()) {
       return [];
     }
@@ -112,13 +99,13 @@ export class SnsPoller {
       await Promise.all(
         functionDefinitions.map(async (fn) => {
           try {
-            await fn.recordHandler(event, fn.functionName, this.topicArn);
+            await fn.recordHandler(event, fn.functionName, this.bucketName);
             return records.reduce((acc, record) => {
               if (record.ReceiptHandle) acc.push(record.ReceiptHandle);
               return acc;
             }, [] as string[]);
           } catch (err: any) {
-            this.warn(`[sns][${this.topicName}] Error emitting records`, err);
+            this.warn(`[sns][${this.bucketName}] Error emitting records`, err);
             return [];
           }
         })
@@ -129,10 +116,10 @@ export class SnsPoller {
   }
 }
 
-export class MappedSNSEvent implements SNSEvent {
-  Records: SNSEventRecord[];
+export class MappedS3Event implements S3Event {
+  Records: S3EventRecord[];
 
-  constructor(messages: Message[], subscriptionArn: string) {
+  constructor(messages: Message[]) {
     this.Records = messages.reduce((acc, record) => {
       const {
         MessageId: messageId,
@@ -145,14 +132,15 @@ export class MappedSNSEvent implements SNSEvent {
         return acc;
       }
 
-      acc.push({
-        EventVersion: "1.0",
-        EventSubscriptionArn: subscriptionArn,
-        EventSource: "aws:sns",
-        Sns: JSON.parse(body),
-      });
+      const detail = JSON.parse(body) as S3EventRecord;
+
+      if (!detail.s3) {
+        return acc;
+      }
+
+      acc.push(detail);
       return acc;
-    }, [] as SNSEventRecord[]);
+    }, [] as S3EventRecord[]);
   }
 
   stringify = (): string => {

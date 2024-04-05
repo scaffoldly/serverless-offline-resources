@@ -31,6 +31,8 @@ import {
   MappedEventBridgeEvent,
 } from "./eventbridge-poller";
 import { retry } from "ts-retry-promise";
+import { S3Client, Event as BucketEvent } from "@aws-sdk/client-s3";
+import { MappedS3Event, S3FunctionDefinition, S3Poller } from "./s3-poller";
 
 export const LOCALSTACK_ENDPOINT =
   process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
@@ -41,7 +43,8 @@ type SupportedResources =
   | "AWS::DynamoDB::Table"
   | "AWS::SNS::Topic"
   | "AWS::SQS::Queue"
-  | "AWS::Events::Rule";
+  | "AWS::Events::Rule"
+  | "AWS::S3::Bucket";
 
 type StackResources = { [key in SupportedResources]: StackResource[] };
 
@@ -54,6 +57,7 @@ type OfflineResourcesProps = {
     eventbridge?: boolean | string[];
     sqs?: boolean | string[];
     sns?: boolean | string[];
+    s3?: boolean | string[];
   };
 };
 
@@ -94,6 +98,11 @@ interface SQSResource {
   };
 }
 
+interface S3Resource {
+  Type: "AWS::S3::Bucket";
+  Properties: {};
+}
+
 interface EventBridgeResource {
   Type: "AWS::Events::Rule";
   Properties: {
@@ -116,6 +125,7 @@ type Resources = {
       | DynamoDBResource
       | SNSResource
       | SQSResource
+      | S3Resource
       | EventBridgeResource;
   };
 };
@@ -144,13 +154,21 @@ type ServerlessService = {
         arn?: { [x: string]: string[] };
       };
       sns?: {
-        arn?: { Ref?: string };
+        arn?: { Ref?: string }; // TODO: support hardcoded
         topicName?: string;
       };
       eventBridge?: {
         name?: string;
         schedule?: string;
         input?: { [key: string]: string };
+      };
+      s3?: {
+        // TODO: support string/ref at top level
+        bucket?: { Ref?: string }; // TODO: support hardcoded
+        event?: BucketEvent;
+        // TODO: Support Rules
+        // TODO: Create the bucket when this is false
+        // existing?: boolean;
       };
     }[];
   };
@@ -201,6 +219,7 @@ class ServerlessOfflineResources {
   sqsQueuePoller?: SqsQueuePoller;
   snsPoller?: SnsPoller;
   eventBridgePoller?: EventBridgePoller;
+  s3Poller?: S3Poller;
 
   serviceName: string;
 
@@ -257,6 +276,7 @@ class ServerlessOfflineResources {
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
       "AWS::Events::Rule": [],
+      "AWS::S3::Bucket": [],
     };
 
     if (
@@ -316,6 +336,16 @@ class ServerlessOfflineResources {
     ) {
       await this.snsHandler(resources["AWS::SNS::Topic"]);
     }
+
+    if (
+      this.config.poll === undefined ||
+      this.config.poll.sns === undefined ||
+      this.config.poll.sns === true ||
+      (Array.isArray(this.config.poll.s3) &&
+        this.config.poll.s3.includes(this.stage))
+    ) {
+      await this.s3Handler(resources["AWS::S3::Bucket"]);
+    }
   }
 
   uniqueify(name: string, separator = "-") {
@@ -334,6 +364,9 @@ class ServerlessOfflineResources {
     }
     if (this.snsPoller) {
       this.snsPoller.stop();
+    }
+    if (this.s3Poller) {
+      this.s3Poller.stop();
     }
     if (this.eventBridgePoller) {
       this.eventBridgePoller.stop();
@@ -395,10 +428,23 @@ class ServerlessOfflineResources {
         };
       }
 
+      if (value.Type === "AWS::S3::Bucket") {
+        // Inject a Queue to Bridge S3 Events to SQS
+        acc[`${key}Queue`] = {
+          Type: "AWS::SQS::Queue",
+          Properties: {
+            QueueName: `__${this.uniqueify(key, "_")}S3Bridge__`,
+          },
+        };
+      }
+
       acc[key] = value;
 
       return acc;
     }, Resources);
+
+    // TODO: add provider.s3 support, which will internally create an AWS::S3::Bucket in the resources list
+    // TODO: for all functions with s3 events and existing being false, create an AWS::S3::Bucket in the resources list
 
     this.getFunctionsWithEventBridgeEvent().forEach((fn) => {
       const queueKey = `${fn.ruleName}Queue`;
@@ -461,6 +507,7 @@ class ServerlessOfflineResources {
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
       "AWS::Events::Rule": [],
+      "AWS::S3::Bucket": [],
     };
 
     const clients = this.clients();
@@ -586,6 +633,7 @@ class ServerlessOfflineResources {
       dynamodbstreams: new DynamoDBStreamsClient(options),
       sns: new SNSClient(options),
       sqs: new SQSClient(options),
+      s3: new S3Client(options),
     };
   }
 
@@ -890,6 +938,100 @@ class ServerlessOfflineResources {
     event: MappedSNSEvent,
     functionName: string
   ): Promise<void> {
+    if (!event || !event.Records || !event.Records.length) {
+      return;
+    }
+
+    const client = new LambdaClient({
+      region: "us-east-1",
+      apiVersion: "2015-03-31",
+      endpoint: "http://localhost:3002",
+    });
+
+    try {
+      await client.send(
+        new InvokeCommand({
+          FunctionName: functionName,
+          Payload: event.stringify(),
+          InvocationType: "Event", // TODO: Perhaps RequestResponse for error handling
+        })
+      );
+    } catch (err: any) {
+      this.warn(`[lambda][${functionName}] Error invoking`, err);
+      // TODO: DLQ or Retries?
+      return;
+    }
+  }
+
+  async s3Handler(buckets: StackResource[]) {
+    await Promise.all(
+      buckets.map(async (bucket) => {
+        await this.createS3Poller(bucket.key, bucket.id);
+      })
+    );
+  }
+
+  getFunctionsWithS3Event(key: string) {
+    return this.service.getAllFunctions().reduce((acc, functionName) => {
+      const functionObject = this.service.getFunction(functionName);
+      // TODO: support topics created outside of the stack
+      const { events } = functionObject;
+      if (!events) {
+        return acc;
+      }
+
+      events.forEach(({ s3 }) => {
+        if (s3 && s3.bucket && s3.bucket.Ref && s3.bucket.Ref === key) {
+          acc.push({
+            functionName: functionObject.name,
+            event: s3.event || "s3:ObjectCreated:*",
+            recordHandler: this.emitS3Event.bind(this),
+          });
+        }
+      });
+
+      return acc;
+    }, [] as S3FunctionDefinition[]);
+  }
+
+  async createS3Poller(key: string, bucketName: string): Promise<void> {
+    const functions = this.getFunctionsWithS3Event(key);
+
+    if (!functions.length) {
+      return;
+    }
+
+    const clients = this.clients();
+
+    this.log(
+      `[s3][${key}] Emitting to functions:`,
+      functions.map((f) => f.functionName)
+    );
+
+    const queue = await clients.sqs.send(
+      new GetQueueUrlCommand({
+        QueueName: `__${this.uniqueify(key, "_")}S3Bridge__`,
+      })
+    );
+
+    if (!queue.QueueUrl) {
+      return;
+    }
+
+    this.s3Poller = new S3Poller(
+      clients.s3,
+      clients.sqs,
+      this.region,
+      bucketName,
+      queue.QueueUrl,
+      functions,
+      this.warn.bind(this)
+    );
+
+    return this.s3Poller.start();
+  }
+
+  async emitS3Event(event: MappedS3Event, functionName: string): Promise<void> {
     if (!event || !event.Records || !event.Records.length) {
       return;
     }
