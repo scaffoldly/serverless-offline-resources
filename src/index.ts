@@ -64,6 +64,7 @@ type OfflineResourcesProps = {
 type StackResource = {
   key: string;
   id: string;
+  attributes: { [key: string]: string };
 };
 
 type ServerlessCustom = {
@@ -135,7 +136,14 @@ type ServerlessService = {
   custom?: ServerlessCustom;
   provider: {
     stage: string;
-    environment?: { [key: string]: string | { Ref?: string } };
+    environment?: {
+      [key: string]:
+        | string
+        | { Ref?: string }
+        | {
+            "Fn::GetAtt"?: [string, string];
+          };
+    };
   };
   resources: Resources;
   getAllFunctions: () => string[];
@@ -489,11 +497,23 @@ class ServerlessOfflineResources {
         ).reduce((acc, [key, value]) => {
           if (
             typeof value !== "string" &&
+            "Ref" in value &&
             value.Ref &&
             value.Ref === resource.key
           ) {
             acc[key] = resource.id;
           }
+
+          if (
+            typeof value !== "string" &&
+            "Fn::GetAtt" in value &&
+            value["Fn::GetAtt"] &&
+            value["Fn::GetAtt"][0] === resource.key &&
+            typeof value["Fn::GetAtt"][1] === "string"
+          ) {
+            acc[key] = resource.attributes[value["Fn::GetAtt"][1]];
+          }
+
           return acc;
         }, this.service.provider.environment || {});
       });
@@ -591,25 +611,46 @@ class ServerlessOfflineResources {
         })
         .promise();
 
-      (stackResourcesResponse.StackResourceSummaries || []).forEach((r) => {
-        if (Object.keys(stackResources).includes(r.ResourceType)) {
-          if (!r.PhysicalResourceId) {
-            return;
+      return (stackResourcesResponse.StackResourceSummaries || []).reduce(
+        async (accP, r) => {
+          const acc = await accP;
+          if (Object.keys(acc).includes(r.ResourceType)) {
+            if (!r.PhysicalResourceId) {
+              return acc;
+            }
+            acc[r.ResourceType as SupportedResources].push({
+              key: r.LogicalResourceId,
+              id: r.PhysicalResourceId,
+              attributes: await this.attributes(
+                r.ResourceType as SupportedResources,
+                r.PhysicalResourceId
+              ),
+            });
           }
-          stackResources[r.ResourceType as SupportedResources].push({
-            key: r.LogicalResourceId,
-            id: r.PhysicalResourceId,
-          });
-        }
-      });
+          return acc;
+        },
+        Promise.resolve(stackResources)
+      );
     } catch (err: any) {
       this.warn(
         `[cloudformation] Unable to list stack resources - ${err.message}`
       );
       throw err;
     }
+  }
 
-    return stackResources;
+  async attributes(
+    type: SupportedResources,
+    id: string
+  ): Promise<{ [key: string]: string }> {
+    if (type === "AWS::S3::Bucket") {
+      // TODO: Support non-localstack resources
+      const url = new URL(LOCALSTACK_ENDPOINT);
+      return {
+        DomainName: `${id}.s3.${url.host}`,
+      };
+    }
+    return {};
   }
 
   clients() {
@@ -1006,7 +1047,7 @@ class ServerlessOfflineResources {
     const clients = this.clients();
 
     this.log(
-      `[s3][${key}] Emitting to functions:`,
+      `[s3][${bucketName}] Emitting to functions:`,
       functions.map((f) => f.functionName)
     );
 
