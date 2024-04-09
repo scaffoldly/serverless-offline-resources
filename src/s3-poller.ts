@@ -148,9 +148,11 @@ export class MappedS3Event implements S3Event {
       const event = JSON.parse(body) as S3Event | S3TestEvent;
       if ("Records" in event && event.Records && event.Records.length) {
         acc = acc.concat(...event.Records);
+        return acc;
       }
 
       if ("Event" in event && event.Event && event.Event === "s3:TestEvent") {
+        console.log("!!! received test event", event);
         this.TestMessageReceiptHandle = receiptHandle;
       }
 

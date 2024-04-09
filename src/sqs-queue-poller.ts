@@ -71,6 +71,8 @@ export class SqsQueuePoller {
           this.queueArn
         );
 
+        console.log("!!! acking messages", receiptHandles);
+
         await Promise.all(
           receiptHandles.map(async (receiptHandle) => {
             await this.client.send(
