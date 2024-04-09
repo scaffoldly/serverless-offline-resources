@@ -18,6 +18,10 @@ export type S3FunctionDefinition = {
   ) => Promise<void>;
 };
 
+type S3TestEvent = {
+  Event: "s3:TestEvent";
+};
+
 export class S3Poller {
   sqsQueuePoller: SqsQueuePoller;
   constructor(
@@ -114,12 +118,17 @@ export class S3Poller {
       )
     ).flat();
 
+    if (event.TestMessageReceiptHandle) {
+      receiptHandles.push(event.TestMessageReceiptHandle);
+    }
+
     return receiptHandles;
   }
 }
 
 export class MappedS3Event implements S3Event {
   Records: S3EventRecord[];
+  TestMessageReceiptHandle: string | undefined = undefined;
 
   constructor(messages: Message[]) {
     this.Records = messages.reduce((acc, record) => {
@@ -136,15 +145,15 @@ export class MappedS3Event implements S3Event {
         return acc;
       }
 
-      const detail = JSON.parse(body) as S3EventRecord;
-
-      console.log("!!! detail", detail);
-
-      if (!detail.s3) {
-        return acc;
+      const event = JSON.parse(body) as S3Event | S3TestEvent;
+      if ("Records" in event && event.Records && event.Records.length) {
+        acc = acc.concat(...event.Records);
       }
 
-      acc.push(detail);
+      if ("Event" in event && event.Event && event.Event === "s3:TestEvent") {
+        this.TestMessageReceiptHandle = receiptHandle;
+      }
+
       return acc;
     }, [] as S3EventRecord[]);
   }
