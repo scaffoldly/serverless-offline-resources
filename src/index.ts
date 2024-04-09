@@ -1057,6 +1057,8 @@ class ServerlessOfflineResources {
       })
     );
 
+    console.log("S3 will emit", queue);
+
     if (!queue.QueueUrl) {
       return;
     }
