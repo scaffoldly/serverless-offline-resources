@@ -88,39 +88,47 @@ export class S3Poller {
   ): Promise<string[]> {
     console.log(`!!! emit queue records to ${functionName}`, records);
 
+    let receiptHandles: string[] = [];
+
     if (!records || !records.length) {
-      return [];
+      return receiptHandles;
     }
 
     const event = new MappedS3Event(records);
+
+    if (event.TestMessageReceiptHandle) {
+      receiptHandles.push(event.TestMessageReceiptHandle);
+    }
+
     if (!event.hasRecords()) {
-      return [];
+      return receiptHandles;
     }
 
     const functionDefinitions = this.functions.filter(
       (fn) => fn.functionName === functionName
     );
 
-    const receiptHandles = (
-      await Promise.all(
-        functionDefinitions.map(async (fn) => {
-          try {
-            await fn.recordHandler(event, fn.functionName, this.bucketName);
-            return records.reduce((acc, record) => {
-              if (record.ReceiptHandle) acc.push(record.ReceiptHandle);
-              return acc;
-            }, [] as string[]);
-          } catch (err: any) {
-            this.warn(`[sns][${this.bucketName}] Error emitting records`, err);
-            return [];
-          }
-        })
-      )
-    ).flat();
-
-    if (event.TestMessageReceiptHandle) {
-      receiptHandles.push(event.TestMessageReceiptHandle);
-    }
+    receiptHandles = receiptHandles.concat(
+      ...(
+        await Promise.all(
+          functionDefinitions.map(async (fn) => {
+            try {
+              await fn.recordHandler(event, fn.functionName, this.bucketName);
+              return records.reduce((acc, record) => {
+                if (record.ReceiptHandle) acc.push(record.ReceiptHandle);
+                return acc;
+              }, [] as string[]);
+            } catch (err: any) {
+              this.warn(
+                `[sns][${this.bucketName}] Error emitting records`,
+                err
+              );
+              return [];
+            }
+          })
+        )
+      ).flat()
+    );
 
     return receiptHandles;
   }
