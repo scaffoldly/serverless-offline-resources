@@ -86,8 +86,6 @@ export class S3Poller {
     records: Message[],
     functionName: string
   ): Promise<string[]> {
-    console.log(`!!! emit queue records to ${functionName}`, records);
-
     let receiptHandles: string[] = [];
 
     if (!records || !records.length) {
@@ -140,8 +138,6 @@ export class MappedS3Event implements S3Event {
 
   constructor(messages: Message[]) {
     this.Records = messages.reduce((acc, record) => {
-      console.log("!!! record", record);
-
       const {
         MessageId: messageId,
         ReceiptHandle: receiptHandle,
@@ -160,7 +156,6 @@ export class MappedS3Event implements S3Event {
       }
 
       if ("Event" in event && event.Event && event.Event === "s3:TestEvent") {
-        console.log("!!! received test event", event);
         this.TestMessageReceiptHandle = receiptHandle;
       }
 
