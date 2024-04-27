@@ -39,7 +39,6 @@ export const LOCALSTACK_ENDPOINT =
 const PLUGIN_NAME = "offline-resources";
 
 type SupportedResources =
-  | "AWS::SecretsManager::Secret"
   | "AWS::DynamoDB::Table"
   | "AWS::SNS::Topic"
   | "AWS::SQS::Queue"
@@ -47,6 +46,7 @@ type SupportedResources =
   | "AWS::S3::Bucket";
 
 type StackResources = { [key in SupportedResources]: StackResource[] };
+type GenericStackResources = { [key in string]: StackResource[] };
 
 type OfflineResourcesProps = {
   region?: string;
@@ -279,7 +279,6 @@ class ServerlessOfflineResources {
     this.log(`Starting...`);
 
     let resources: StackResources = {
-      "AWS::SecretsManager::Secret": [],
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
@@ -489,7 +488,7 @@ class ServerlessOfflineResources {
     return resources;
   }
 
-  async updateEnvironment(stackResources: StackResources) {
+  async updateEnvironment(stackResources: GenericStackResources) {
     Object.values(stackResources).forEach((stackResource) => {
       Object.values(stackResource).forEach((resource) => {
         this.service.provider.environment = Object.entries(
@@ -522,7 +521,6 @@ class ServerlessOfflineResources {
 
   async cloudformationHandler(): Promise<StackResources> {
     let stackResources: StackResources = {
-      "AWS::SecretsManager::Secret": [],
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
