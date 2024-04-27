@@ -38,15 +38,23 @@ export const LOCALSTACK_ENDPOINT =
   process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
 const PLUGIN_NAME = "offline-resources";
 
-type SupportedResources =
+type EventDrivenResources =
   | "AWS::DynamoDB::Table"
   | "AWS::SNS::Topic"
   | "AWS::SQS::Queue"
   | "AWS::Events::Rule"
   | "AWS::S3::Bucket";
 
+// Generic Reources are used only for updating environment variables using their metadata
+type GenericResources = "AWS::SecretsManager::Secret" | "AWS::KMS::Key";
+const GENERIC_RESOURCES: GenericResources[] = [
+  "AWS::SecretsManager::Secret",
+  "AWS::KMS::Key",
+];
+
+type SupportedResources = EventDrivenResources | GenericResources;
+
 type StackResources = { [key in SupportedResources]: StackResource[] };
-type GenericStackResources = { [key in string]: StackResource[] };
 
 type OfflineResourcesProps = {
   region?: string;
@@ -71,10 +79,10 @@ type ServerlessCustom = {
   "offline-resources"?: OfflineResourcesProps;
 };
 
-interface SecretsManagerResource {
-  Type: "AWS::SecretsManager::Secret";
+interface GenericResource {
+  Type: GenericResources;
   Properties: {
-    Name: string;
+    Name?: string;
   };
 }
 
@@ -122,7 +130,7 @@ interface EventBridgeResource {
 type Resources = {
   Resources: {
     [key: string]:
-      | SecretsManagerResource
+      | GenericResource
       | DynamoDBResource
       | SNSResource
       | SQSResource
@@ -279,11 +287,13 @@ class ServerlessOfflineResources {
     this.log(`Starting...`);
 
     let resources: StackResources = {
+      "AWS::SecretsManager::Secret": [],
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
       "AWS::Events::Rule": [],
       "AWS::S3::Bucket": [],
+      "AWS::KMS::Key": [],
     };
 
     if (
@@ -395,10 +405,12 @@ class ServerlessOfflineResources {
     Object.entries(Resources).reduce((acc, [key, value]) => {
       if (
         value.Properties &&
-        value.Type === "AWS::SecretsManager::Secret" &&
-        value.Properties.Name
+        GENERIC_RESOURCES.includes(value.Type as GenericResources)
       ) {
-        value.Properties.Name = this.uniqueify(value.Properties.Name);
+        value = value as GenericResource;
+        if (value.Properties.Name) {
+          value.Properties.Name = this.uniqueify(value.Properties.Name);
+        }
       }
 
       if (
@@ -488,7 +500,7 @@ class ServerlessOfflineResources {
     return resources;
   }
 
-  async updateEnvironment(stackResources: GenericStackResources) {
+  async updateEnvironment(stackResources: StackResources) {
     Object.values(stackResources).forEach((stackResource) => {
       Object.values(stackResource).forEach((resource) => {
         this.service.provider.environment = Object.entries(
@@ -521,11 +533,13 @@ class ServerlessOfflineResources {
 
   async cloudformationHandler(): Promise<StackResources> {
     let stackResources: StackResources = {
+      "AWS::SecretsManager::Secret": [],
       "AWS::DynamoDB::Table": [],
       "AWS::SNS::Topic": [],
       "AWS::SQS::Queue": [],
       "AWS::Events::Rule": [],
       "AWS::S3::Bucket": [],
+      "AWS::KMS::Key": [],
     };
 
     const clients = this.clients();
