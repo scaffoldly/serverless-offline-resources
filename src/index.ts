@@ -362,8 +362,8 @@ class ServerlessOfflineResources {
 
     if (
       this.config.poll === undefined ||
-      this.config.poll.sns === undefined ||
-      this.config.poll.sns === true ||
+      this.config.poll.s3 === undefined ||
+      this.config.poll.s3 === true ||
       (Array.isArray(this.config.poll.s3) &&
         this.config.poll.s3.includes(this.stage))
     ) {
@@ -1061,6 +1061,7 @@ class ServerlessOfflineResources {
   }
 
   async s3Handler(buckets: StackResource[]) {
+    console.log("!!! s3Handler", buckets);
     await Promise.all(
       buckets.map(async (bucket) => {
         await this.createS3Poller(bucket.key, bucket.id);
@@ -1078,6 +1079,7 @@ class ServerlessOfflineResources {
       }
 
       events.forEach(({ s3 }) => {
+        console.log("!!! checking", s3);
         if (
           s3 &&
           s3.bucket &&
@@ -1085,6 +1087,7 @@ class ServerlessOfflineResources {
           !s3.existing &&
           (!key || s3.bucket === key)
         ) {
+          console.log("!!! adding non-existing", s3);
           acc.push({
             functionName: functionObject.name,
             key: s3.bucket,
@@ -1102,6 +1105,7 @@ class ServerlessOfflineResources {
           s3.bucket.Ref &&
           s3.bucket.Ref === key
         ) {
+          console.log("!!! adding existing", s3);
           acc.push({
             functionName: functionObject.name,
             key,
