@@ -33,6 +33,7 @@ import {
 import { retry } from "ts-retry-promise";
 import { S3Client, Event as BucketEvent } from "@aws-sdk/client-s3";
 import { MappedS3Event, S3FunctionDefinition, S3Poller } from "./s3-poller";
+import { capitalizeKeys } from "./util";
 
 export const LOCALSTACK_ENDPOINT =
   process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
@@ -109,7 +110,7 @@ interface SQSResource {
 
 interface S3Resource {
   Type: "AWS::S3::Bucket";
-  Properties: {};
+  Properties: { [key: string]: any };
 }
 
 interface EventBridgeResource {
@@ -152,6 +153,12 @@ type ServerlessService = {
             "Fn::GetAtt"?: [string, string];
           };
     };
+    s3?: {
+      [key: string]: {
+        name?: string;
+        // All other props will be converted to PascalCase
+      };
+    };
   };
   resources: Resources;
   getAllFunctions: () => string[];
@@ -179,12 +186,11 @@ type ServerlessService = {
         input?: { [key: string]: string };
       };
       s3?: {
-        // TODO: support string/ref at top level
-        bucket?: { Ref?: string }; // TODO: support hardcoded
+        bucket?: string | { Ref?: string };
         event?: BucketEvent;
         // TODO: Support Rules
         // TODO: Create the bucket when this is false
-        // existing?: boolean;
+        existing?: boolean;
       };
     }[];
   };
@@ -447,6 +453,7 @@ class ServerlessOfflineResources {
         };
       }
 
+      // This is for supporting S3 events where "existing: true"
       if (value.Type === "AWS::S3::Bucket") {
         // Inject a Queue to Bridge S3 Events to SQS
         acc[`${key}Queue`] = {
@@ -494,6 +501,40 @@ class ServerlessOfflineResources {
             },
           ],
         },
+      };
+    });
+
+    // This is for supporting SNS events where "existing: false"
+    this.getFunctionsWithS3Event().forEach((fn) => {
+      if (fn.existing) {
+        // "existing" buckets are wired up above
+        return;
+      }
+
+      const queueKey = `${fn.key}Queue`;
+
+      // Create a queue as the backhaul
+      Resources[queueKey] = {
+        Type: "AWS::SQS::Queue",
+        Properties: {
+          QueueName: `__${this.uniqueify(fn.key, "_")}S3Bridge__`,
+        },
+      };
+
+      const bucketDefinition = this.service.provider.s3?.[fn.key];
+
+      // TODO: Support buckets that are defined at the function level
+
+      if (!bucketDefinition) {
+        return;
+      }
+
+      const bucketKey = `S3Bucket${fn.key}`;
+
+      // Create a bucket as defined in "provider.s3"
+      Resources[bucketKey] = {
+        Type: "AWS::S3::Bucket",
+        Properties: capitalizeKeys(bucketDefinition),
       };
     });
 
@@ -1026,7 +1067,7 @@ class ServerlessOfflineResources {
     );
   }
 
-  getFunctionsWithS3Event(key: string) {
+  getFunctionsWithS3Event(key?: string) {
     return this.service.getAllFunctions().reduce((acc, functionName) => {
       const functionObject = this.service.getFunction(functionName);
       // TODO: support topics created outside of the stack
@@ -1036,11 +1077,36 @@ class ServerlessOfflineResources {
       }
 
       events.forEach(({ s3 }) => {
-        if (s3 && s3.bucket && s3.bucket.Ref && s3.bucket.Ref === key) {
+        if (
+          !key &&
+          s3 &&
+          s3.bucket &&
+          typeof s3.bucket === "string" &&
+          !s3.existing
+        ) {
           acc.push({
             functionName: functionObject.name,
+            key: s3.bucket,
             event: s3.event || "s3:ObjectCreated:*",
             recordHandler: this.emitS3Event.bind(this),
+            existing: false,
+          });
+        }
+
+        if (
+          s3 &&
+          s3.bucket &&
+          s3.existing === true &&
+          typeof s3.bucket !== "string" &&
+          s3.bucket.Ref &&
+          s3.bucket.Ref === key
+        ) {
+          acc.push({
+            functionName: functionObject.name,
+            key,
+            event: s3.event || "s3:ObjectCreated:*",
+            recordHandler: this.emitS3Event.bind(this),
+            existing: true,
           });
         }
       });
