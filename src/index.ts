@@ -539,6 +539,12 @@ class ServerlessOfflineResources {
         Type: "AWS::S3::Bucket",
         Properties: capitalizeKeys(bucketDefinition),
       };
+
+      console.log(
+        "!!! Enriched CF with bucket",
+        fn.bucketKey,
+        Resources[fn.bucketKey]
+      );
     });
 
     return resources;
