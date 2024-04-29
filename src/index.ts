@@ -511,29 +511,27 @@ class ServerlessOfflineResources {
         return;
       }
 
-      const queueKey = `${fn.key}Queue`;
+      const queueKey = `${fn.bucketKey}Queue`;
 
       // Create a queue as the backhaul
       Resources[queueKey] = {
         Type: "AWS::SQS::Queue",
         Properties: {
-          QueueName: `__${this.uniqueify(fn.key, "_")}S3Bridge__`,
+          QueueName: `__${this.uniqueify(fn.bucketKey, "_")}S3Bridge__`,
         },
       };
 
-      const bucketDefinition = (this.service.provider.s3 || {})[fn.key];
+      const bucketDefinition = (this.service.provider.s3 || {})[fn.bucketKey];
 
       // TODO: Support buckets that are defined at the function level
 
       if (!bucketDefinition) {
-        this.log(`[s3][${fn.key}] No bucket definition found.`);
+        this.log(`[s3][${fn.bucketKey}] No bucket definition found.`);
         return;
       }
 
-      const bucketKey = `S3Bucket${fn.key}`;
-
       // Create a bucket as defined in "provider.s3"
-      Resources[bucketKey] = {
+      Resources[fn.bucketKey] = {
         Type: "AWS::S3::Bucket",
         Properties: capitalizeKeys(bucketDefinition),
       };
@@ -1090,7 +1088,7 @@ class ServerlessOfflineResources {
           console.log("!!! adding non-existing", s3);
           acc.push({
             functionName: functionObject.name,
-            key: s3.bucket,
+            bucketKey: `S3Bucket${s3.bucket}`,
             event: s3.event || "s3:ObjectCreated:*",
             recordHandler: this.emitS3Event.bind(this),
             existing: false,
@@ -1108,7 +1106,7 @@ class ServerlessOfflineResources {
           console.log("!!! adding existing", s3);
           acc.push({
             functionName: functionObject.name,
-            key,
+            bucketKey: key,
             event: s3.event || "s3:ObjectCreated:*",
             recordHandler: this.emitS3Event.bind(this),
             existing: true,

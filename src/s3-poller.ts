@@ -10,7 +10,7 @@ import {
 
 export type S3FunctionDefinition = {
   functionName: string;
-  key: string;
+  bucketKey: string;
   existing: boolean;
   event: BucketEvent;
   recordHandler: (
