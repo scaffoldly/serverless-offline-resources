@@ -537,14 +537,12 @@ class ServerlessOfflineResources {
       // Create a bucket as defined in "provider.s3"
       Resources[fn.bucketKey] = {
         Type: "AWS::S3::Bucket",
-        Properties: capitalizeKeys(bucketDefinition),
+        Properties: {
+          BucketName: bucketDefinition.name,
+          ...capitalizeKeys(bucketDefinition),
+          Name: undefined,
+        },
       };
-
-      console.log(
-        "!!! Enriched CF with bucket",
-        fn.bucketKey,
-        Resources[fn.bucketKey]
-      );
     });
 
     return resources;
