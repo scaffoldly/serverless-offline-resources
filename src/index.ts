@@ -506,7 +506,7 @@ class ServerlessOfflineResources {
 
     // This is for supporting SNS events where "existing: false"
     this.getFunctionsWithS3Event().forEach((fn) => {
-      if (fn.existing || !fn.providerS3BucketKey) {
+      if (fn.existing || !fn.providerS3Key) {
         // "existing" buckets are wired up above
         return;
       }
@@ -522,14 +522,14 @@ class ServerlessOfflineResources {
       };
 
       const bucketDefinition = (this.service.provider.s3 || {})[
-        fn.providerS3BucketKey
+        fn.providerS3Key
       ];
 
       // TODO: Support buckets that are defined at the function level
 
       if (!bucketDefinition) {
         this.log(
-          `[s3] No bucket definition of \`${fn.providerS3BucketKey}\` found in \`provider.s3\`.`
+          `[s3] No bucket definition of \`${fn.providerS3Key}\` found in \`provider.s3\`.`
         );
         return;
       }
@@ -1093,7 +1093,7 @@ class ServerlessOfflineResources {
           acc.push({
             functionName: functionObject.name,
             bucketKey: `S3Bucket${s3.bucket}`,
-            providerKey: s3.bucket,
+            providerS3Key: s3.bucket,
             event: s3.event || "s3:ObjectCreated:*",
             recordHandler: this.emitS3Event.bind(this),
             existing: false,
