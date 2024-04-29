@@ -10,8 +10,7 @@ import {
 
 export type S3FunctionDefinition = {
   functionName: string;
-  cfBucketKey: string; // The key of the bucket in the CF template
-  slsBucketKey?: string; // The key of the bucket in serverless.yml
+  bucketKey: string;
   existing: boolean;
   event: BucketEvent;
   recordHandler: (

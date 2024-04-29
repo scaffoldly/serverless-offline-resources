@@ -506,34 +506,32 @@ class ServerlessOfflineResources {
 
     // This is for supporting SNS events where "existing: false"
     this.getFunctionsWithS3Event().forEach((fn) => {
-      if (fn.existing || !fn.slsBucketKey) {
+      if (fn.existing) {
         // "existing" buckets are wired up above
         return;
       }
 
-      const queueKey = `${fn.cfBucketKey}Queue`;
+      const queueKey = `${fn.bucketKey}Queue`;
 
       // Create a queue as the backhaul
       Resources[queueKey] = {
         Type: "AWS::SQS::Queue",
         Properties: {
-          QueueName: `__${this.uniqueify(fn.cfBucketKey, "_")}S3Bridge__`,
+          QueueName: `__${this.uniqueify(fn.bucketKey, "_")}S3Bridge__`,
         },
       };
 
-      const bucketDefinition = (this.service.provider.s3 || {})[
-        fn.slsBucketKey
-      ];
+      const bucketDefinition = (this.service.provider.s3 || {})[fn.bucketKey];
 
       // TODO: Support buckets that are defined at the function level
 
       if (!bucketDefinition) {
-        this.log(`[s3][${fn.slsBucketKey}] No bucket definition found.`);
+        this.log(`[s3][${fn.bucketKey}] No bucket definition found.`);
         return;
       }
 
       // Create a bucket as defined in "provider.s3"
-      Resources[fn.cfBucketKey] = {
+      Resources[fn.bucketKey] = {
         Type: "AWS::S3::Bucket",
         Properties: capitalizeKeys(bucketDefinition),
       };
@@ -1085,13 +1083,12 @@ class ServerlessOfflineResources {
           s3.bucket &&
           typeof s3.bucket === "string" &&
           !s3.existing &&
-          (!key || s3.bucket === key)
+          (!key || key === `S3Bucket${s3.bucket}`)
         ) {
           console.log("!!! adding non-existing", s3);
           acc.push({
             functionName: functionObject.name,
-            slsBucketKey: s3.bucket,
-            cfBucketKey: `S3Bucket${s3.bucket}`,
+            bucketKey: `S3Bucket${s3.bucket}`,
             event: s3.event || "s3:ObjectCreated:*",
             recordHandler: this.emitS3Event.bind(this),
             existing: false,
@@ -1109,7 +1106,7 @@ class ServerlessOfflineResources {
           console.log("!!! adding existing", s3);
           acc.push({
             functionName: functionObject.name,
-            cfBucketKey: key,
+            bucketKey: key,
             event: s3.event || "s3:ObjectCreated:*",
             recordHandler: this.emitS3Event.bind(this),
             existing: true,
