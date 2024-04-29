@@ -256,6 +256,9 @@ class ServerlessOfflineResources {
     this.options = options;
     this.provider = "aws";
 
+    console.log("!!! serverless", serverless);
+    console.log("!!! options", options);
+
     this.hooks = {
       "before:offline:start": this.startHandler.bind(this),
       "before:offline:start:init": this.startHandler.bind(this),
@@ -1063,7 +1066,6 @@ class ServerlessOfflineResources {
   }
 
   async s3Handler(buckets: StackResource[]) {
-    console.log("!!! s3Handler", buckets);
     await Promise.all(
       buckets.map(async (bucket) => {
         await this.createS3Poller(bucket.key, bucket.id);
@@ -1081,7 +1083,6 @@ class ServerlessOfflineResources {
       }
 
       events.forEach(({ s3 }) => {
-        console.log(`!!! checking for key: ${key}`, s3);
         if (
           s3 &&
           s3.bucket &&
@@ -1089,7 +1090,6 @@ class ServerlessOfflineResources {
           !s3.existing &&
           (!key || key === `S3Bucket${s3.bucket}`)
         ) {
-          console.log("!!! adding non-existing", s3);
           acc.push({
             functionName: functionObject.name,
             bucketKey: `S3Bucket${s3.bucket}`,
@@ -1108,7 +1108,6 @@ class ServerlessOfflineResources {
           s3.bucket.Ref &&
           s3.bucket.Ref === key
         ) {
-          console.log("!!! adding existing", s3);
           acc.push({
             functionName: functionObject.name,
             bucketKey: key,
