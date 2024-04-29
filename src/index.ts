@@ -226,6 +226,21 @@ export const msg = (
   }
 };
 
+const safeStringify = (obj: any, indent = 2) => {
+  let cache: any[] = [];
+  const retVal = JSON.stringify(
+    obj,
+    (_key, value) =>
+      typeof value === "object" && value !== null
+        ? cache.includes(value)
+          ? undefined // Duplicate reference found, discard key
+          : cache.push(value) && value // Store value in our collection
+        : value,
+    indent
+  );
+  return retVal;
+};
+
 class ServerlessOfflineResources {
   started: boolean;
   service: ServerlessService;
@@ -256,7 +271,7 @@ class ServerlessOfflineResources {
     this.options = options;
     this.provider = "aws";
 
-    console.log("!!! serverless", serverless);
+    console.log("!!! serverless", safeStringify(serverless));
     console.log("!!! options", options);
 
     this.hooks = {
