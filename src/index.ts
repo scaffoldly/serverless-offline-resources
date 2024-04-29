@@ -521,11 +521,12 @@ class ServerlessOfflineResources {
         },
       };
 
-      const bucketDefinition = this.service.provider.s3?.[fn.key];
+      const bucketDefinition = (this.service.provider.s3 || {})[fn.key];
 
       // TODO: Support buckets that are defined at the function level
 
       if (!bucketDefinition) {
+        this.log(`[s3][${fn.key}] No bucket definition found.`);
         return;
       }
 
@@ -1078,11 +1079,11 @@ class ServerlessOfflineResources {
 
       events.forEach(({ s3 }) => {
         if (
-          !key &&
           s3 &&
           s3.bucket &&
           typeof s3.bucket === "string" &&
-          !s3.existing
+          !s3.existing &&
+          (!key || s3.bucket === key)
         ) {
           acc.push({
             functionName: functionObject.name,
