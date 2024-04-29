@@ -11,6 +11,7 @@ import {
 export type S3FunctionDefinition = {
   functionName: string;
   bucketKey: string;
+  providerS3BucketKey?: string;
   existing: boolean;
   event: BucketEvent;
   recordHandler: (
