@@ -22,16 +22,15 @@
     "@aws-sdk/client-s3": "3",
     "@aws-sdk/client-sns": "3",
     "@aws-sdk/client-sqs": "3",
+    "@types/aws-lambda": "8",
     "@types/lodash": "4",
     "@types/mime": "3",
     "@types/node": "16",
+    "@types/uuid": "9",
     "aws-sdk": "2",
     "lodash": "4",
     "ts-retry-promise": "0",
     "typescript": ">=5"
   },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.124",
-    "@types/uuid": "^9.0.8"
-  }
+  "devDependencies": {}
 }
