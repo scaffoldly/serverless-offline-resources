@@ -37,6 +37,9 @@ import { capitalizeKeys } from "./util";
 
 export const LOCALSTACK_ENDPOINT =
   process.env.LOCALSTACK_ENDPOINT || "http://127.0.0.1:4566";
+export const MOTO_ENDPOINT =
+  process.env.MOTO_ENDPOINT || "http://127.0.0.1:5000";
+
 const PLUGIN_NAME = "offline-resources";
 
 type EventDrivenResources =
@@ -704,7 +707,7 @@ class ServerlessOfflineResources {
     id: string
   ): Promise<{ [key: string]: string }> {
     if (type === "AWS::S3::Bucket") {
-      // TODO: Support non-localstack resources
+      // TODO: Support non-localstack/moto resources
       const url = new URL(LOCALSTACK_ENDPOINT);
       return {
         DomainName: `${id}.s3.${url.host}`,
@@ -721,6 +724,12 @@ class ServerlessOfflineResources {
     if (process.env.LOCALSTACK === "true") {
       endpoint = LOCALSTACK_ENDPOINT;
       credentials = new AWS.Credentials("test", "test");
+      forcePathStyle = true;
+    }
+
+    if (process.env.MOTO === "true") {
+      endpoint = MOTO_ENDPOINT;
+      credentials = new AWS.Credentials("testing", "testing");
       forcePathStyle = true;
     }
 
